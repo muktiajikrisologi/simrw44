@@ -1,0 +1,6 @@
+{
+  "name": "Sistem Administrasi & Keuangan RW (PWA)",
+  "description": "Aplikasi PWA manajemen keuangan dan administrasi tingkat RW terintegrasi Multi-Role, Kas RW, Koperasi, Jimpitan & Denda Ronda, Notulen, serta Supabase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
