@@ -297,6 +297,7 @@ export default function App() {
                   rekapJimpitan={store.rekapJimpitan || []}
                   kelompokRonda={store.kelompokRonda || []}
                   onToggleRincianStatus={store.toggleRincianArisanStatus}
+                  onSelectMenu={(menuId) => setSelectedMenu(menuId)}
                 />
               )}
             </div>

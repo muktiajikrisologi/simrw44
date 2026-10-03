@@ -1,39 +1,31 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../../supabaseClient';
-import { UserRole } from '../../types';
-import { 
-  Plus, 
-  Loader2, 
-  AlertCircle,
-  Calendar,
-  X,
-  Trash2,
-  Building2,
-  CheckCircle2,
-  XCircle
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { supabase } from '../../lib/supabase';
+import { Search, Save } from 'lucide-react';
 
-interface KoperasiContentProps {
-  activeRole?: UserRole | string;
+export interface KoperasiRecord {
+  id?: string;
+  warga_id?: string;
+  bulan_tahun: string;
+  nama_warga: string;
+  blok_rumah: string;
+  iuran_wajib: number;
+  angsuran_ke: number;
+  tanggal_cair_peminjaman?: string;
+  jumlah_angsuran: number;
+  total_kewajiban: number;
+  status: 'lunas' | 'terutang';
 }
 
 interface WargaOption {
   id: string;
   nama: string;
-  blok?: string;
+  blok: string;
+  no_rumah?: string;
 }
 
-interface KoperasiTableItem {
-  id?: string;
-  warga_id: string;
-  warga_nama: string;
-  blok: string;
-  tanggal_cair: string | null;
-  angsuran_koperasi: number;
-  simpanan_wajib: number;
-  total_tagihan: number;
-  status: 'lunas' | 'belum_lunas';
-  periode: string;
+interface KoperasiProps {
+  userRole?: string;
+  activeRole?: string;
 }
 
 const BULAN_LIST = [
@@ -41,485 +33,422 @@ const BULAN_LIST = [
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
 ];
 
-export const KoperasiContent: React.FC<KoperasiContentProps> = ({ activeRole }) => {
-  const [dataList, setDataList] = useState<KoperasiTableItem[]>([]);
+export default function KoperasiContent(props: KoperasiProps) {
+  const rawRole = (props.userRole || props.activeRole || 'warga').toLowerCase();
+  const isBendahara =
+    rawRole.includes('bendahara') ||
+    rawRole.includes('admin') ||
+    rawRole.includes('pengurus') ||
+    rawRole === 'rw' ||
+    rawRole === 'rt';
+
+  const [selectedBulan, setSelectedBulan] = useState<string>('Maret');
+  const [selectedTahun, setSelectedTahun] = useState<string>('2026');
+
+  const periodeKey = `${selectedBulan} ${selectedTahun}`;
+
   const [wargaList, setWargaList] = useState<WargaOption[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [submitting, setSubmitting] = useState<boolean>(false);
-  const [showAddForm, setShowAddForm] = useState<boolean>(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [tableData, setTableData] = useState<Record<string, KoperasiRecord>>({});
+  const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'semua' | 'lunas' | 'terutang'>('semua');
 
-  // State Dropdown Periode
-  const currentDate = new Date();
-  const [selectedBulan, setSelectedBulan] = useState<string>(BULAN_LIST[currentDate.getMonth()]);
-  const [selectedTahun, setSelectedTahun] = useState<string>(currentDate.getFullYear().toString());
+  useEffect(() => {
+    loadData();
+  }, [periodeKey]);
 
-  // Generate Opsi Tahun
-  const currentYearNum = currentDate.getFullYear();
-  const tahunList = Array.from({ length: 5 }, (_, i) => (currentYearNum - 2 + i).toString());
+  // Helper penentu format Blok Rumah agar tidak dobel
+  const getFormattedBlok = (w: WargaOption) => {
+    if (!w.blok && !w.no_rumah) return '-';
+    if (w.blok && w.no_rumah && !w.blok.includes(w.no_rumah)) {
+      return `${w.blok}.${w.no_rumah}`;
+    }
+    return w.blok || w.no_rumah || '-';
+  };
 
-  const selectedPeriode = `${selectedBulan} ${selectedTahun}`;
-
-  // Hak Akses Ketat: Hanya Super Admin & Bendahara Koperasi
-  const normalizedRole = activeRole?.toString().toLowerCase().trim() || '';
-  const canManage = 
-    normalizedRole === 'super_admin' || 
-    normalizedRole === 'superadmin' || 
-    normalizedRole === 'bendahara_koperasi' || 
-    normalizedRole === 'bendahara koperasi';
-
-  // Form State
-  const [formData, setFormData] = useState({
-    warga_id: '',
-    tanggal_cair: new Date().toISOString().split('T')[0],
-    angsuran_koperasi: '',
-    simpanan_wajib: '',
-    status: 'lunas' as 'lunas' | 'belum_lunas',
-  });
-
-  const fetchData = async () => {
-    setLoading(true);
-    setErrorMessage(null);
+  const loadData = async () => {
     try {
-      // 1. Ambil seluruh Warga
-      const { data: wargaData, error: wargaErr } = await supabase
+      setLoading(true);
+
+      const { data: dataWarga, error: errWarga } = await supabase
         .from('warga')
-        .select('id, nama, blok')
+        .select('id, nama, blok, no_rumah')
         .order('nama', { ascending: true });
 
-      if (wargaErr) throw wargaErr;
-      const allWarga: WargaOption[] = wargaData || [];
-      setWargaList(allWarga);
+      if (errWarga) throw errWarga;
+      setWargaList(dataWarga || []);
 
-      if (allWarga.length > 0 && !formData.warga_id) {
-        setFormData((prev) => ({ ...prev, warga_id: allWarga[0].id }));
-      }
-
-      // 2. Ambil Transaksi Koperasi
-      const { data: koperasiData, error: koperasiErr } = await supabase
+      const { data: dataKoperasi, error: errKoperasi } = await supabase
         .from('koperasi')
-        .select(`
-          id,
-          warga_id,
-          jenis,
-          periode,
-          nominal,
-          status,
-          tanggal_bayar,
-          created_at
-        `)
-        .order('created_at', { ascending: false });
+        .select('*')
+        .eq('bulan_tahun', periodeKey);
 
-      if (koperasiErr) throw koperasiErr;
+      if (errKoperasi) throw errKoperasi;
 
-      // 3. Mapping data per warga & periode
-      const transactionMap = new Map<string, KoperasiTableItem>();
-
-      (koperasiData || []).forEach((item: any) => {
-        const key = `${item.warga_id}-${(item.periode || '').toLowerCase().trim()}`;
-        const existing = transactionMap.get(key) || {
-          id: item.id,
-          warga_id: item.warga_id,
-          warga_nama: '',
-          blok: '',
-          tanggal_cair: item.tanggal_bayar || null,
-          angsuran_koperasi: 0,
-          simpanan_wajib: 0,
-          total_tagihan: 0,
-          status: item.status === 'lunas' ? 'lunas' : 'belum_lunas',
-          periode: item.periode || '',
-        };
-
-        const nominal = Number(item.nominal || 0);
-
-        if (item.jenis === 'angsuran' || item.jenis === 'pinjaman') {
-          existing.angsuran_koperasi += nominal;
-        } else if (item.jenis === 'simpanan_wajib' || item.jenis === 'simpanan_pokok' || item.jenis === 'simpanan_sukarela') {
-          existing.simpanan_wajib += nominal;
-        }
-
-        if (item.tanggal_bayar && !existing.tanggal_cair) {
-          existing.tanggal_cair = item.tanggal_bayar;
-        }
-
-        if (item.status === 'lunas') {
-          existing.status = 'lunas';
-        }
-
-        existing.total_tagihan = existing.angsuran_koperasi + existing.simpanan_wajib;
-        transactionMap.set(key, existing);
+      const map: Record<string, KoperasiRecord> = {};
+      (dataKoperasi || []).forEach((item: KoperasiRecord) => {
+        const key = item.warga_id || item.nama_warga;
+        map[key] = item;
       });
 
-      // 4. Gabungkan seluruh data Warga
-      const combinedData: KoperasiTableItem[] = allWarga.map((w) => {
-        const key = `${w.id}-${selectedPeriode.toLowerCase().trim()}`;
-        const tx = transactionMap.get(key);
-
-        return {
-          id: tx?.id,
-          warga_id: w.id,
-          warga_nama: w.nama,
-          blok: w.blok || '-',
-          tanggal_cair: tx?.tanggal_cair || null,
-          angsuran_koperasi: tx?.angsuran_koperasi || 0,
-          simpanan_wajib: tx?.simpanan_wajib || 0,
-          total_tagihan: tx?.total_tagihan || 0,
-          status: tx ? tx.status : 'belum_lunas',
-          periode: selectedPeriode,
-        };
-      });
-
-      setDataList(combinedData);
+      setTableData(map);
     } catch (err: any) {
-      console.error('Error fetching koperasi data:', err.message);
-      setErrorMessage(err.message);
+      console.error('Gagal memuat data:', err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [selectedBulan, selectedTahun]);
+  const handleInputChange = (
+    warga: WargaOption,
+    field: keyof KoperasiRecord,
+    value: any
+  ) => {
+    const key = warga.id;
+    const existing = tableData[key] || {
+      warga_id: warga.id,
+      bulan_tahun: periodeKey,
+      nama_warga: warga.nama,
+      blok_rumah: getFormattedBlok(warga),
+      iuran_wajib: 50000,
+      angsuran_ke: 0,
+      tanggal_cair_peminjaman: '',
+      jumlah_angsuran: 0,
+      total_kewajiban: 50000,
+      status: 'terutang',
+    };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!canManage) return;
+    const updated = { ...existing, [field]: value };
+    const iuran = Number(updated.iuran_wajib || 0);
+    const angsuran = Number(updated.jumlah_angsuran || 0);
+    updated.total_kewajiban = iuran + angsuran;
 
-    if (!formData.warga_id) {
-      alert('Pilih warga terlebih dahulu!');
-      return;
-    }
+    setTableData({
+      ...tableData,
+      [key]: updated,
+    });
+  };
 
-    setSubmitting(true);
+  const handleSaveRow = async (warga: WargaOption) => {
+    if (!isBendahara) return;
+    const key = warga.id;
+    const record = tableData[key] || {
+      warga_id: warga.id,
+      bulan_tahun: periodeKey,
+      nama_warga: warga.nama,
+      blok_rumah: getFormattedBlok(warga),
+      iuran_wajib: 50000,
+      angsuran_ke: 0,
+      tanggal_cair_peminjaman: null,
+      jumlah_angsuran: 0,
+      total_kewajiban: 50000,
+      status: 'terutang',
+    };
+
     try {
-      const inserts = [];
-      const angsuran = parseFloat(formData.angsuran_koperasi || '0');
-      const simpanan = parseFloat(formData.simpanan_wajib || '0');
+      setSavingId(key);
 
-      if (angsuran > 0) {
-        inserts.push({
-          warga_id: formData.warga_id,
-          jenis: 'angsuran',
-          periode: selectedPeriode,
-          nominal: angsuran,
-          status: formData.status,
-          tanggal_bayar: formData.tanggal_cair || null,
-        });
+      const payload = {
+        warga_id: record.warga_id,
+        bulan_tahun: periodeKey,
+        nama_warga: record.nama_warga,
+        blok_rumah: record.blok_rumah,
+        iuran_wajib: Number(record.iuran_wajib || 0),
+        angsuran_ke: Number(record.angsuran_ke || 0),
+        tanggal_cair_peminjaman: record.tanggal_cair_peminjaman || null,
+        jumlah_angsuran: Number(record.jumlah_angsuran || 0),
+        total_kewajiban: Number(record.iuran_wajib || 0) + Number(record.jumlah_angsuran || 0),
+        status: record.status || 'terutang',
+      };
+
+      if (record.id) {
+        const { error } = await supabase
+          .from('koperasi')
+          .update(payload)
+          .eq('id', record.id);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase
+          .from('koperasi')
+          .insert([payload])
+          .select()
+          .single();
+
+        if (error) throw error;
+        if (data) {
+          setTableData((prev) => ({
+            ...prev,
+            [key]: { ...record, id: data.id },
+          }));
+        }
       }
-
-      if (simpanan > 0) {
-        inserts.push({
-          warga_id: formData.warga_id,
-          jenis: 'simpanan_wajib',
-          periode: selectedPeriode,
-          nominal: simpanan,
-          status: formData.status,
-          tanggal_bayar: formData.tanggal_cair || null,
-        });
-      }
-
-      if (inserts.length === 0) {
-        alert('Isi nominal Angsuran Koperasi atau Simpanan Wajib!');
-        setSubmitting(false);
-        return;
-      }
-
-      const { error } = await supabase.from('koperasi').insert(inserts);
-      if (error) throw error;
-
-      alert('Data tagihan koperasi berhasil ditambahkan!');
-      setShowAddForm(false);
-      setFormData({
-        warga_id: wargaList[0]?.id || '',
-        tanggal_cair: new Date().toISOString().split('T')[0],
-        angsuran_koperasi: '',
-        simpanan_wajib: '',
-        status: 'lunas',
-      });
-      fetchData();
     } catch (err: any) {
-      alert(`Gagal menyimpan: ${err.message}`);
+      alert('Gagal menyimpan: ' + err.message);
     } finally {
-      setSubmitting(false);
+      setSavingId(null);
     }
   };
 
-  const handleToggleStatus = async (item: KoperasiTableItem) => {
-    if (!canManage || !item.id) return;
-
-    const nextStatus = item.status === 'lunas' ? 'belum_lunas' : 'lunas';
-
-    try {
-      const { error } = await supabase
-        .from('koperasi')
-        .update({ status: nextStatus })
-        .eq('id', item.id);
-
-      if (error) throw error;
-      fetchData();
-    } catch (err: any) {
-      alert(`Gagal mengubah status: ${err.message}`);
-    }
+  const toggleStatus = (warga: WargaOption) => {
+    const key = warga.id;
+    const currentStatus = tableData[key]?.status || 'terutang';
+    const nextStatus = currentStatus === 'lunas' ? 'terutang' : 'lunas';
+    handleInputChange(warga, 'status', nextStatus);
   };
 
-  const handleDelete = async (id?: string) => {
-    if (!canManage || !id) return;
-    if (!window.confirm('Hapus transaksi warga ini?')) return;
+  const filteredWarga = wargaList.filter((w) => {
+    const key = w.id;
+    const rec = tableData[key];
+    const matchSearch =
+      w.nama.toLowerCase().includes(search.toLowerCase()) ||
+      (w.blok && w.blok.toLowerCase().includes(search.toLowerCase()));
 
-    try {
-      const { error } = await supabase.from('koperasi').delete().eq('id', id);
-      if (error) throw error;
-      fetchData();
-    } catch (err: any) {
-      alert(`Gagal menghapus: ${err.message}`);
-    }
-  };
+    if (!matchSearch) return false;
 
-  const formatRupiah = (val: number) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
-  };
+    if (statusFilter === 'lunas') return rec?.status === 'lunas';
+    if (statusFilter === 'terutang') return (rec?.status || 'terutang') === 'terutang';
+
+    return true;
+  });
 
   return (
-    <div className="space-y-4">
-      {errorMessage && (
-        <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>Error DB: {errorMessage}</span>
-        </div>
-      )}
-
-      {/* Header Bar & Dropdown Periode */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+    <div className="p-2 md:p-3 space-y-3">
+      {/* Header Periode */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
         <div className="flex items-center gap-2">
-          <Building2 className="w-5 h-5 text-cyan-600 shrink-0" />
-          <div>
-            <h4 className="font-extrabold text-slate-800 text-sm">Laporan Koperasi Warga</h4>
-            <p className="text-[10px] text-slate-500">Rincian Simpanan & Angsuran</p>
-          </div>
+          <span className="text-xs font-bold text-slate-600">Periode:</span>
+          <select
+            value={selectedBulan}
+            onChange={(e) => setSelectedBulan(e.target.value)}
+            className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+          >
+            {BULAN_LIST.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
+
+          <input
+            type="number"
+            value={selectedTahun}
+            onChange={(e) => setSelectedTahun(e.target.value)}
+            className="w-20 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-emerald-500 text-center"
+          />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-          <div className="flex items-center gap-1.5 bg-white border border-slate-300 px-2.5 py-1.5 rounded-xl text-xs shadow-xs">
-            <Calendar className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
-            
-            <select
-              value={selectedBulan}
-              onChange={(e) => setSelectedBulan(e.target.value)}
-              className="bg-transparent font-bold text-slate-700 outline-none cursor-pointer text-xs"
-            >
-              {BULAN_LIST.map((b) => (
-                <option key={b} value={b}>{b}</option>
-              ))}
-            </select>
-
-            <select
-              value={selectedTahun}
-              onChange={(e) => setSelectedTahun(e.target.value)}
-              className="bg-transparent font-bold text-slate-700 outline-none cursor-pointer text-xs border-l border-slate-200 pl-1.5"
-            >
-              {tahunList.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-          </div>
-
-          {canManage && (
-            <button
-              onClick={() => setShowAddForm(!showAddForm)}
-              className="flex items-center gap-1 bg-cyan-600 hover:bg-cyan-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition shrink-0 cursor-pointer"
-            >
-              {showAddForm ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-              {showAddForm ? 'Batal' : 'Tambah'}
-            </button>
+        <div className="text-[11px] text-slate-500 font-medium">
+          {isBendahara ? (
+            <span className="text-emerald-700 font-bold bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+              Mode Edit Bendahara
+            </span>
+          ) : (
+            <span className="text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg">
+              Mode Lihat Warga
+            </span>
           )}
         </div>
       </div>
 
-      {/* Form Tambah Data */}
-      {showAddForm && canManage && (
-        <form onSubmit={handleSubmit} className="p-4 bg-cyan-50/50 border border-cyan-200 rounded-2xl space-y-3">
-          <div className="flex justify-between items-center border-b border-cyan-200 pb-1">
-            <p className="font-bold text-slate-800 text-xs">Tambah Data Koperasi Warga</p>
-            <span className="text-[10px] bg-cyan-200 text-cyan-800 font-bold px-2 py-0.5 rounded-md">
-              Periode: {selectedPeriode}
-            </span>
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">Nama Warga *</label>
-              <select
-                value={formData.warga_id}
-                onChange={(e) => setFormData({ ...formData, warga_id: e.target.value })}
-                required
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl outline-none focus:border-cyan-500"
-              >
-                {wargaList.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.nama} {w.blok ? `(Blok ${w.blok})` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">Tanggal Cair</label>
-              <input
-                type="date"
-                value={formData.tanggal_cair}
-                onChange={(e) => setFormData({ ...formData, tanggal_cair: e.target.value })}
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl outline-none focus:border-cyan-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">Angsuran Koperasi (Rp)</label>
-              <input
-                type="number"
-                min="0"
-                placeholder="0"
-                value={formData.angsuran_koperasi}
-                onChange={(e) => setFormData({ ...formData, angsuran_koperasi: e.target.value })}
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl outline-none focus:border-cyan-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">Simpanan Wajib (Rp)</label>
-              <input
-                type="number"
-                min="0"
-                placeholder="0"
-                value={formData.simpanan_wajib}
-                onChange={(e) => setFormData({ ...formData, simpanan_wajib: e.target.value })}
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl outline-none focus:border-cyan-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">Status Pembayaran</label>
-              <select
-                value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl outline-none focus:border-cyan-500 font-bold text-slate-700"
-              >
-                <option value="lunas">Lunas</option>
-                <option value="belum_lunas">Belum Lunas</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-1">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-            >
-              {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              Simpan Data
-            </button>
-          </div>
-        </form>
-      )}
-
-      {/* Tabel Koperasi */}
-      {loading ? (
-        <div className="flex justify-center py-8 text-cyan-600">
-          <Loader2 className="w-6 h-6 animate-spin" />
+      {/* Filter & Search */}
+      <div className="flex flex-col sm:flex-row gap-2 justify-between items-center">
+        <div className="relative w-full sm:w-72">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Cari nama/blok..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
         </div>
-      ) : (
-        <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs bg-white">
-          <div className="overflow-x-auto max-h-96">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead className="sticky top-0 bg-slate-100 z-10 border-b border-slate-200 text-slate-700 font-extrabold uppercase text-[10px] tracking-wider">
+
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <select
+            value={statusFilter}
+            onChange={(e: any) => setStatusFilter(e.target.value)}
+            className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="semua">Semua Status</option>
+            <option value="terutang">Terutang</option>
+            <option value="lunas">Lunas</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Tabel Utama Koperasi */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead className="bg-slate-50 text-slate-600 font-extrabold uppercase border-b border-slate-200 text-[10px] tracking-wider">
+              <tr>
+                <th className="p-2.5 text-center w-10">NO</th>
+                <th className="p-2.5 min-w-[140px]">NAMA</th>
+                <th className="p-2.5 text-center min-w-[80px]">BLOK</th>
+                <th className="p-2.5 text-center min-w-[110px]">IURAN WAJIB</th>
+                <th className="p-2.5 text-center min-w-[90px]">ANGSURAN KE</th>
+                <th className="p-2.5 text-center min-w-[120px]">TGL CAIR</th>
+                <th className="p-2.5 text-center min-w-[120px]">JML ANGSURAN</th>
+                <th className="p-2.5 text-right min-w-[120px]">TOTAL KEWAJIBAN</th>
+                <th className="p-2.5 text-center min-w-[100px]">STATUS</th>
+                {isBendahara && <th className="p-2.5 text-center min-w-[80px]">SIMPAN</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {loading ? (
                 <tr>
-                  <th className="p-3">Nama Warga</th>
-                  <th className="p-3">Blok</th>
-                  <th className="p-3">Tanggal Cair</th>
-                  <th className="p-3 text-right">Angsuran Koperasi</th>
-                  <th className="p-3 text-right">Simpanan Wajib</th>
-                  <th className="p-3 text-right">Total Tagihan</th>
-                  <th className="p-3 text-center">Aksi / Status</th>
+                  <td colSpan={10} className="p-8 text-center text-slate-400 font-medium">
+                    Memuat data rekap warga...
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {dataList.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-8 text-slate-400 font-medium">
-                      Belum ada data warga terdaftar.
-                    </td>
-                  </tr>
-                ) : (
-                  dataList.map((row) => (
-                    <tr key={row.warga_id} className="hover:bg-slate-50/80 transition">
-                      <td className="p-3 font-bold text-slate-800">{row.warga_nama}</td>
-                      <td className="p-3 text-slate-600 font-medium">{row.blok}</td>
-                      <td className="p-3 text-slate-500">
-                        {row.tanggal_cair ? new Date(row.tanggal_cair).toLocaleDateString('id-ID') : '-'}
-                      </td>
-                      <td className="p-3 text-right font-medium text-slate-700">
-                        {formatRupiah(row.angsuran_koperasi)}
-                      </td>
-                      <td className="p-3 text-right font-medium text-slate-700">
-                        {formatRupiah(row.simpanan_wajib)}
-                      </td>
-                      <td className="p-3 text-right font-extrabold text-cyan-700 bg-cyan-50/30">
-                        {formatRupiah(row.total_tagihan)}
-                      </td>
-                      <td className="p-3 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {row.id ? (
-                            <>
-                              <button
-                                onClick={() => handleToggleStatus(row)}
-                                disabled={!canManage}
-                                className={`px-2 py-1 rounded-lg text-[10px] font-extrabold flex items-center gap-1 transition ${
-                                  row.status === 'lunas'
-                                    ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                                    : 'bg-rose-100 text-rose-800 hover:bg-rose-200'
-                                } ${canManage ? 'cursor-pointer' : 'cursor-default'}`}
-                                title={canManage ? 'Klik untuk ubah status' : ''}
-                              >
-                                {row.status === 'lunas' ? (
-                                  <>
-                                    <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                                    <span>Lunas</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <XCircle className="w-3 h-3 text-rose-600 shrink-0" />
-                                    <span>Belum Lunas</span>
-                                  </>
-                                )}
-                              </button>
+              ) : filteredWarga.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="p-8 text-center text-slate-400 font-medium">
+                    Tidak ada data warga ditemukan.
+                  </td>
+                </tr>
+              ) : (
+                filteredWarga.map((warga, idx) => {
+                  const key = warga.id;
+                  const displayBlok = getFormattedBlok(warga);
+                  const rec = tableData[key] || {
+                    warga_id: warga.id,
+                    bulan_tahun: periodeKey,
+                    nama_warga: warga.nama,
+                    blok_rumah: displayBlok,
+                    iuran_wajib: 50000,
+                    angsuran_ke: 0,
+                    tanggal_cair_peminjaman: '',
+                    jumlah_angsuran: 0,
+                    total_kewajiban: 50000,
+                    status: 'terutang',
+                  };
 
-                              {canManage && (
-                                <button
-                                  onClick={() => handleDelete(row.id)}
-                                  className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                                  title="Hapus Record"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                            </>
-                          ) : (
-                            <span className="px-2 py-1 bg-slate-100 text-slate-400 rounded-lg text-[10px] font-semibold flex items-center gap-1">
-                              <XCircle className="w-3 h-3 text-slate-300" />
-                              Belum Ada Data
-                            </span>
-                          )}
-                        </div>
+                  const isLunas = rec.status === 'lunas';
+
+                  return (
+                    <tr key={warga.id} className="hover:bg-slate-50/80 transition">
+                      <td className="p-2 text-center text-slate-400 font-medium">{idx + 1}</td>
+                      <td className="p-2 font-bold text-slate-800 uppercase text-[11px]">
+                        {warga.nama}
                       </td>
+                      <td className="p-2 text-center font-bold text-slate-600 text-[11px]">
+                        {displayBlok}
+                      </td>
+                      <td className="p-2 text-center">
+                        {isBendahara ? (
+                          <input
+                            type="number"
+                            value={rec.iuran_wajib}
+                            onChange={(e) =>
+                              handleInputChange(warga, 'iuran_wajib', Number(e.target.value))
+                            }
+                            className="w-24 px-2 py-1 border border-slate-200 rounded-lg text-center font-mono text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                          />
+                        ) : (
+                          <span className="font-mono text-slate-700">
+                            Rp {Number(rec.iuran_wajib || 0).toLocaleString('id-ID')}
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-2 text-center">
+                        {isBendahara ? (
+                          <input
+                            type="number"
+                            value={rec.angsuran_ke}
+                            onChange={(e) =>
+                              handleInputChange(warga, 'angsuran_ke', Number(e.target.value))
+                            }
+                            className="w-16 px-2 py-1 border border-slate-200 rounded-lg text-center font-bold text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                          />
+                        ) : (
+                          <span className="font-bold text-slate-700">
+                            {rec.angsuran_ke > 0 ? rec.angsuran_ke : '-'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-2 text-center">
+                        {isBendahara ? (
+                          <input
+                            type="date"
+                            value={rec.tanggal_cair_peminjaman || ''}
+                            onChange={(e) =>
+                              handleInputChange(warga, 'tanggal_cair_peminjaman', e.target.value)
+                            }
+                            className="w-28 px-1.5 py-1 border border-slate-200 rounded-lg text-center text-[11px] focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                          />
+                        ) : (
+                          <span className="text-slate-500 text-[11px]">
+                            {rec.tanggal_cair_peminjaman || '-'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-2 text-center">
+                        {isBendahara ? (
+                          <input
+                            type="number"
+                            value={rec.jumlah_angsuran}
+                            onChange={(e) =>
+                              handleInputChange(warga, 'jumlah_angsuran', Number(e.target.value))
+                            }
+                            className="w-24 px-2 py-1 border border-slate-200 rounded-lg text-center font-mono text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                          />
+                        ) : (
+                          <span className="font-mono text-slate-700">
+                            Rp {Number(rec.jumlah_angsuran || 0).toLocaleString('id-ID')}
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-2 text-right font-mono font-extrabold text-amber-700 text-xs pr-3">
+                        Rp {Number(rec.total_kewajiban || 0).toLocaleString('id-ID')}
+                      </td>
+                      <td className="p-2 text-center">
+                        {isBendahara ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleStatus(warga)}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase border cursor-pointer transition ${
+                              isLunas
+                                ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
+                                : 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
+                            }`}
+                          >
+                            {isLunas ? 'LUNAS' : 'TERUTANG'}
+                          </button>
+                        ) : (
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                              isLunas
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                : 'bg-amber-100 text-amber-800 border border-amber-200'
+                            }`}
+                          >
+                            {rec.status || 'TERUTANG'}
+                          </span>
+                        )}
+                      </td>
+                      {isBendahara && (
+                        <td className="p-2 text-center">
+                          <button
+                            type="button"
+                            disabled={savingId === warga.id}
+                            onClick={() => handleSaveRow(warga)}
+                            className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition shadow-2xs cursor-pointer disabled:opacity-50"
+                            title="Simpan Baris Ini"
+                          >
+                            <Save className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      )}
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
     </div>
   );
-};
+}

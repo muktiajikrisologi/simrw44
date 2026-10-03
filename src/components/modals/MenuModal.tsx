@@ -10,7 +10,7 @@ import { TataTertibContent } from '../menu/TataTertibContent';
 import { NomorPentingContent } from '../menu/NomorPentingContent';
 import { InfoIuranContent } from '../menu/InfoIuranContent';
 import { IuranRondaContent } from '../menu/IuranRondaContent';
-import { KoperasiContent } from '../menu/KoperasiContent';
+import KoperasiContent from '../menu/KoperasiContent';
 import { BukuKasContent } from '../menu/BukuKasContent';
 
 // Import Modal Notulen & Pengumuman
@@ -56,6 +56,7 @@ export const MenuModal: React.FC<MenuModalProps> = ({
   // Penyesuaian Lebar Modal berdasarkan jenis menu
   const isWideMenu = [
     'koperasi',
+    'koperasi_warga',
     'info_iuran',
     'iuran',
     'data_warga',
@@ -138,8 +139,8 @@ export const MenuModal: React.FC<MenuModalProps> = ({
           )}
 
           {/* 7. Koperasi Warga */}
-          {selectedMenu === 'koperasi' && (
-            <KoperasiContent activeRole={activeRole} />
+          {(selectedMenu === 'koperasi' || selectedMenu === 'koperasi_warga') && (
+            <KoperasiContent userRole={activeRole} />
           )}
 
           {/* 8. Buku Kas RW */}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useRWStore } from '../../hooks/useRWStore';
-import { X, Bell, Plus, Edit3, Trash2, Calendar } from 'lucide-react';
+import { getSupabase } from '../../lib/supabase';
+import { X, Bell, Plus, Edit3, Trash2, Calendar, Loader2 } from 'lucide-react';
 
 interface PengumumanModalProps {
   isOpen: boolean;
@@ -8,16 +9,20 @@ interface PengumumanModalProps {
 }
 
 export const PengumumanModal: React.FC<PengumumanModalProps> = ({ isOpen, onClose }) => {
+  const store = useRWStore();
   const {
     notulen,
     currentUser,
     addNotulen,
     updateNotulen,
     deleteNotulen,
-  } = useRWStore();
+    supabaseConnected,
+    syncWithSupabase,
+  } = store;
 
   const [activeTab, setActiveTab] = useState<'daftar' | 'tambah'>('daftar');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   // Form State
   const [judul, setJudul] = useState('');
@@ -40,26 +45,92 @@ export const PengumumanModal: React.FC<PengumumanModalProps> = ({ isOpen, onClos
     return isPengumuman;
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!judul || !konten) return;
 
-    if (editingId) {
-      updateNotulen(editingId, { judul, konten, status, kategori: 'pengumuman' });
-      setEditingId(null);
-    } else {
-      addNotulen({
-        judul,
-        konten,
-        kategori: 'pengumuman',
-        status,
-        tanggal: new Date().toISOString().split('T')[0],
-      });
-    }
+    setLoading(true);
+    const client = getSupabase();
+    const today = new Date().toISOString().split('T')[0];
 
-    setJudul('');
-    setKonten('');
-    setActiveTab('daftar');
+    try {
+      if (supabaseConnected && client) {
+        if (editingId) {
+          // UPDATE ke Supabase
+          const { error } = await client
+            .from('notulen')
+            .update({
+              judul,
+              konten,
+              status,
+              kategori: 'pengumuman',
+              tanggal: today,
+            })
+            .eq('id', editingId);
+
+          if (error) throw error;
+        } else {
+          // INSERT ke Supabase
+          const { error } = await client.from('notulen').insert([
+            {
+              id: crypto.randomUUID(),
+              judul,
+              konten,
+              kategori: 'pengumuman',
+              status,
+              tanggal: today,
+            },
+          ]);
+
+          if (error) throw error;
+        }
+
+        // Sync ulang agar data di state lokal langsung terbarui dari Supabase
+        await syncWithSupabase();
+      } else {
+        // Fallback jika tidak terhubung Supabase
+        if (editingId) {
+          updateNotulen(editingId, { judul, konten, status, kategori: 'pengumuman' });
+        } else {
+          addNotulen({
+            judul,
+            konten,
+            kategori: 'pengumuman',
+            status,
+            tanggal: today,
+          });
+        }
+      }
+
+      resetForm();
+      setActiveTab('daftar');
+    } catch (err: any) {
+      alert('Gagal menyimpan pengumuman ke Supabase: ' + (err.message || err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Apakah Anda yakin ingin menghapus pengumuman ini?')) return;
+
+    setLoading(true);
+    const client = getSupabase();
+
+    try {
+      if (supabaseConnected && client) {
+        const { error } = await client.from('notulen').delete().eq('id', id);
+        if (error) throw error;
+
+        await syncWithSupabase();
+      } else {
+        deleteNotulen(id);
+      }
+    } catch (err: any) {
+      alert('Gagal menghapus pengumuman dari Supabase: ' + (err.message || err));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEdit = (item: any) => {
@@ -89,12 +160,15 @@ export const PengumumanModal: React.FC<PengumumanModalProps> = ({ isOpen, onClos
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-800">Pengumuman Warga</h3>
-              <p className="text-xs text-slate-500">Layanan RW 44 Terpadu</p>
+              <p className="text-xs text-slate-500">
+                Layanan RW 44 Terpadu {supabaseConnected ? '• Supabase Connected' : ''}
+              </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
+            disabled={loading}
+            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors disabled:opacity-50"
           >
             <X className="w-5 h-5" />
           </button>
@@ -105,6 +179,7 @@ export const PengumumanModal: React.FC<PengumumanModalProps> = ({ isOpen, onClos
           <div className="flex border-b bg-slate-50 px-4 pt-2 gap-2">
             <button
               onClick={() => { setActiveTab('daftar'); resetForm(); }}
+              disabled={loading}
               className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors ${
                 activeTab === 'daftar'
                   ? 'bg-white text-amber-600 border-t border-x border-slate-200'
@@ -115,6 +190,7 @@ export const PengumumanModal: React.FC<PengumumanModalProps> = ({ isOpen, onClos
             </button>
             <button
               onClick={() => { setActiveTab('tambah'); resetForm(); }}
+              disabled={loading}
               className={`flex items-center gap-1 px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors ${
                 activeTab === 'tambah'
                   ? 'bg-white text-amber-600 border-t border-x border-slate-200'
@@ -137,10 +213,11 @@ export const PengumumanModal: React.FC<PengumumanModalProps> = ({ isOpen, onClos
                 <input
                   type="text"
                   required
+                  disabled={loading}
                   value={judul}
                   onChange={(e) => setJudul(e.target.value)}
                   placeholder="Contoh: Kerja Bakti Kebersihan Lingkungan RT 02"
-                  className="w-full border rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-amber-500 outline-none"
+                  className="w-full border rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-amber-500 outline-none disabled:bg-slate-50"
                 />
               </div>
 
@@ -149,10 +226,11 @@ export const PengumumanModal: React.FC<PengumumanModalProps> = ({ isOpen, onClos
                 <textarea
                   required
                   rows={6}
+                  disabled={loading}
                   value={konten}
                   onChange={(e) => setKonten(e.target.value)}
                   placeholder="Tulis pesan atau pengumuman lengkap untuk warga..."
-                  className="w-full border rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-amber-500 outline-none"
+                  className="w-full border rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-amber-500 outline-none disabled:bg-slate-50"
                 />
               </div>
 
@@ -160,8 +238,9 @@ export const PengumumanModal: React.FC<PengumumanModalProps> = ({ isOpen, onClos
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Status Publikasi</label>
                 <select
                   value={status}
+                  disabled={loading}
                   onChange={(e) => setStatus(e.target.value as any)}
-                  className="w-full border rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-amber-500 outline-none"
+                  className="w-full border rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-amber-500 outline-none disabled:bg-slate-50"
                 >
                   <option value="published">Published (Tampil di Warga)</option>
                   <option value="draft">Draft (Hanya Pengurus)</option>
@@ -171,15 +250,18 @@ export const PengumumanModal: React.FC<PengumumanModalProps> = ({ isOpen, onClos
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
+                  disabled={loading}
                   onClick={() => { setActiveTab('daftar'); resetForm(); }}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 border rounded-lg hover:bg-slate-50"
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 border rounded-lg hover:bg-slate-50 disabled:opacity-50"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700"
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50"
                 >
+                  {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   {editingId ? 'Update Pengumuman' : 'Terbitkan Pengumuman'}
                 </button>
               </div>
@@ -212,13 +294,15 @@ export const PengumumanModal: React.FC<PengumumanModalProps> = ({ isOpen, onClos
                           </span>
                           <button
                             onClick={() => handleEdit(item)}
-                            className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                            disabled={loading}
+                            className="p-1 text-blue-600 hover:bg-blue-50 rounded disabled:opacity-50"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={() => deleteNotulen(item.id)}
-                            className="p-1 text-red-600 hover:bg-red-50 rounded"
+                            onClick={() => handleDelete(item.id)}
+                            disabled={loading}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -247,7 +331,8 @@ export const PengumumanModal: React.FC<PengumumanModalProps> = ({ isOpen, onClos
         <div className="p-3 border-t bg-slate-50 flex justify-end">
           <button
             onClick={onClose}
-            className="w-full sm:w-auto px-5 py-2 bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs hover:bg-slate-300 transition-colors"
+            disabled={loading}
+            className="w-full sm:w-auto px-5 py-2 bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs hover:bg-slate-300 transition-colors disabled:opacity-50"
           >
             Tutup
           </button>
