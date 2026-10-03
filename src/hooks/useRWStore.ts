@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   UserProfile,
   UserRole,
@@ -29,22 +29,57 @@ import {
 } from '../lib/dataRW44';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
 
+// Helper pembersih string (menghapus spasi, titik, strip, agar matching presisi)
+const cleanStr = (str: any) =>
+  String(str || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+
+// Helper hitung aman total kewajiban ronda berdasarkan data di Rekap Jimpitan
+const hitungRondaAman = (item: RekapJimpitanRondaEntry) => {
+  if (!item) return 0;
+  // Jika status lunas, kewajiban rondanya 0
+  if (item.status === 'lunas') return 0;
+
+  const denda = Number(item.denda_ronda) || 0;
+  const bagi = Number(item.bagi_jimpitan) || 0;
+  const tdkIsi = Number(item.tdk_isi_jimpitan) || 0;
+  const setoran = Number(item.setoran_regu) || 0;
+  const tunggakan = Number(item.tunggakan_bln_lalu) || 0;
+
+  return denda + bagi + tdkIsi + setoran + tunggakan;
+};
+
 export function useRWStore() {
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
     try {
       const saved = localStorage.getItem('simrw_current_user');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return INITIAL_USERS[0];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && parsed.id) return parsed;
+      }
+    } catch (e) {
+      console.warn('Gagal membaca current user dari localStorage', e);
+    }
+    return INITIAL_USERS[0] || {
+      id: 'usr-default',
+      nama: 'Pengguna',
+      email: 'admin@rw05.id',
+      role: 'super_admin',
+    };
   });
 
   const [users, setUsers] = useState<UserProfile[]>(() => {
     try {
       const saved = localStorage.getItem('simrw_users');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    // Mengisikan kata sandi default "password123" pada data awal pengguna
-    return INITIAL_USERS.map((u) => ({
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.warn('Gagal membaca users dari localStorage', e);
+    }
+    return (INITIAL_USERS || []).map((u) => ({
       ...u,
       password: u.password || 'password123',
     }));
@@ -53,96 +88,151 @@ export function useRWStore() {
   const [warga, setWarga] = useState<Warga[]>(() => {
     try {
       const saved = localStorage.getItem('simrw_warga');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
     } catch {}
-    return INITIAL_WARGA;
+    return INITIAL_WARGA || [];
   });
 
   const [kasRW, setKasRW] = useState<KasRW[]>(() => {
     try {
       const saved = localStorage.getItem('simrw_kas');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
     } catch {}
-    return INITIAL_KAS_RW;
+    return INITIAL_KAS_RW || [];
   });
 
   const [koperasi, setKoperasi] = useState<Koperasi[]>(() => {
     try {
       const saved = localStorage.getItem('simrw_koperasi');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
     } catch {}
-    return INITIAL_KOPERASI;
+    return INITIAL_KOPERASI || [];
   });
 
   const [jimpitan, setJimpitan] = useState<JimpitanDenda[]>(() => {
     try {
       const saved = localStorage.getItem('simrw_jimpitan');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
     } catch {}
-    return INITIAL_JIMPITAN;
+    return INITIAL_JIMPITAN || [];
   });
 
   const [notulen, setNotulen] = useState<Notulen[]>(() => {
     try {
       const saved = localStorage.getItem('simrw_notulen');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
     } catch {}
-    return INITIAL_NOTULEN;
+    return INITIAL_NOTULEN || [];
   });
 
   const [rekapJimpitan, setRekapJimpitan] = useState<RekapJimpitanRondaEntry[]>(() => {
     try {
       const saved = localStorage.getItem('simrw_rekap_jimpitan_rw44');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
     } catch {}
-    return INITIAL_REKAP_JIMPITAN_RONDA;
+    return INITIAL_REKAP_JIMPITAN_RONDA || [];
   });
 
   const [kelompokRonda, setKelompokRonda] = useState<KelompokRonda[]>(() => {
     try {
       const saved = localStorage.getItem('simrw_kelompok_ronda_rw44');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
     } catch {}
-    return INITIAL_KELOMPOK_RONDA;
+    return INITIAL_KELOMPOK_RONDA || [];
   });
 
   const [rincianArisan, setRincianArisan] = useState<RincianKewajibanArisan[]>(() => {
     try {
       const saved = localStorage.getItem('simrw_rincian_arisan_rw44');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
     } catch {}
-    return INITIAL_RINCIAN_ARISAN_RW44;
+    return INITIAL_RINCIAN_ARISAN_RW44 || [];
   });
 
   const [agendaArisan, setAgendaArisan] = useState<AgendaArisanRW>(() => {
     try {
       const saved = localStorage.getItem('simrw_agenda_arisan_rw44');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
     } catch {}
-    return AGENDA_ARISAN_RW44;
+    return AGENDA_ARISAN_RW44 || {};
   });
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [supabaseConnected, setSupabaseConnected] = useState(isSupabaseConfigured());
 
+  // Dynamic Link: Menghubungkan rekapJimpitan (ronda) ke rincianArisan secara real-time
+  const rincianArisanTerhubung = useMemo(() => {
+    return (rincianArisan || []).map((w) => {
+      const namaW = cleanStr(w.nama);
+      const blokW = cleanStr(w.blok_rumah);
+
+      const matchRonda = (rekapJimpitan || []).find((r) => {
+        const namaR = cleanStr(r.nama_warga || r.nama);
+        const blokR = cleanStr(r.no_rumah || r.blok);
+
+        return (namaW && namaR && namaW === namaR) || (blokW && blokR && blokW === blokR);
+      });
+
+      const rondaVal = matchRonda ? hitungRondaAman(matchRonda) : 0;
+      const kopVal = Number(w.angsuran_koperasi) || 0;
+      const arisanVal = Number(w.arisan) || 0;
+      const rtVal = Number(w.iuran_rt) || 0;
+
+      return {
+        ...w,
+        jmlh_kewajiban_ronda: rondaVal,
+        jumlah_kewajiban: kopVal + rondaVal + arisanVal + rtVal,
+      };
+    });
+  }, [rincianArisan, rekapJimpitan]);
+
+  // Simpan perubahan state ke LocalStorage secara aman
   useEffect(() => {
     try {
-      localStorage.setItem('simrw_current_user', JSON.stringify(currentUser));
-      localStorage.setItem('simrw_users', JSON.stringify(users));
-      localStorage.setItem('simrw_warga', JSON.stringify(warga));
-      localStorage.setItem('simrw_kas', JSON.stringify(kasRW));
-      localStorage.setItem('simrw_koperasi', JSON.stringify(koperasi));
-      localStorage.setItem('simrw_jimpitan', JSON.stringify(jimpitan));
-      localStorage.setItem('simrw_notulen', JSON.stringify(notulen));
-      localStorage.setItem('simrw_rekap_jimpitan_rw44', JSON.stringify(rekapJimpitan));
-      localStorage.setItem('simrw_kelompok_ronda_rw44', JSON.stringify(kelompokRonda));
-      localStorage.setItem('simrw_rincian_arisan_rw44', JSON.stringify(rincianArisan));
-      localStorage.setItem('simrw_agenda_arisan_rw44', JSON.stringify(agendaArisan));
+      if (currentUser) localStorage.setItem('simrw_current_user', JSON.stringify(currentUser));
+      if (users) localStorage.setItem('simrw_users', JSON.stringify(users));
+      if (warga) localStorage.setItem('simrw_warga', JSON.stringify(warga));
+      if (kasRW) localStorage.setItem('simrw_kas', JSON.stringify(kasRW));
+      if (koperasi) localStorage.setItem('simrw_koperasi', JSON.stringify(koperasi));
+      if (jimpitan) localStorage.setItem('simrw_jimpitan', JSON.stringify(jimpitan));
+      if (notulen) localStorage.setItem('simrw_notulen', JSON.stringify(notulen));
+      if (rekapJimpitan) localStorage.setItem('simrw_rekap_jimpitan_rw44', JSON.stringify(rekapJimpitan));
+      if (kelompokRonda) localStorage.setItem('simrw_kelompok_ronda_rw44', JSON.stringify(kelompokRonda));
+      if (rincianArisan) localStorage.setItem('simrw_rincian_arisan_rw44', JSON.stringify(rincianArisan));
+      if (agendaArisan) localStorage.setItem('simrw_agenda_arisan_rw44', JSON.stringify(agendaArisan));
     } catch (e) {
       console.warn('Storage sync failed', e);
     }
   }, [currentUser, users, warga, kasRW, koperasi, jimpitan, notulen, rekapJimpitan, kelompokRonda, rincianArisan, agendaArisan]);
 
+  // Sinkronisasi data dari Supabase dengan penanganan error terisolasi
   const syncWithSupabase = useCallback(async () => {
     const client = getSupabase();
     if (!client) {
@@ -151,24 +241,90 @@ export function useRWStore() {
     }
     setIsSyncing(true);
     try {
-      const [uRes, wRes, kRes, kopRes, jRes, nRes] = await Promise.all([
-        client.from('users').select('*').limit(100),
-        client.from('warga').select('*').limit(50),
-        client.from('kas_rw').select('*').limit(50),
-        client.from('koperasi').select('*').limit(50),
-        client.from('jimpitan_denda').select('*').limit(50),
-        client.from('notulen').select('*').limit(50),
+      const [uRes, wRes, kRes, kopRes, jRes, nRes] = await Promise.allSettled([
+        client.from('users').select('*').limit(1000),
+        client.from('warga').select('*').order('nama', { ascending: true }),
+        client.from('kas_rw').select('*').limit(1000),
+        client.from('koperasi').select('*').limit(1000),
+        client.from('jimpitan_denda').select('*').limit(1000),
+        client.from('notulen').select('*').limit(1000),
       ]);
 
-      if (uRes.data && uRes.data.length > 0) setUsers(uRes.data);
-      if (wRes.data && wRes.data.length > 0) setWarga(wRes.data);
-      if (kRes.data && kRes.data.length > 0) setKasRW(kRes.data);
-      if (kopRes.data && kopRes.data.length > 0) setKoperasi(kopRes.data);
-      if (jRes.data && jRes.data.length > 0) setJimpitan(jRes.data);
-      if (nRes.data && nRes.data.length > 0) setNotulen(nRes.data);
+      let fetchedWarga: Warga[] = [];
+      if (wRes.status === 'fulfilled' && wRes.value.data && wRes.value.data.length > 0) {
+        fetchedWarga = wRes.value.data;
+        setWarga(fetchedWarga);
+      }
+
+      if (uRes.status === 'fulfilled' && uRes.value.data && uRes.value.data.length > 0) {
+        setUsers(uRes.value.data);
+      }
+      if (kRes.status === 'fulfilled' && kRes.value.data && kRes.value.data.length > 0) {
+        setKasRW(kRes.value.data);
+      }
+      if (kopRes.status === 'fulfilled' && kopRes.value.data && kopRes.value.data.length > 0) {
+        setKoperasi(kopRes.value.data);
+      }
+
+      if (jRes.status === 'fulfilled' && jRes.value.data && jRes.value.data.length > 0) {
+        const jData = jRes.value.data;
+        setJimpitan(jData);
+
+        // Konversi data Supabase jimpitan_denda ke struktur RekapJimpitanRondaEntry
+        const mappedRekap: RekapJimpitanRondaEntry[] = jData.map((item: any, index: number) => {
+          const namaVal = item.nama_warga || item.nama || '-';
+          const blokVal = item.no_rumah || item.blok || '-';
+          const denda = Number(item.denda_ronda) || 0;
+          const bagi = Number(item.bagi_jimpitan) || 0;
+          const tdkIsi = Number(item.tdk_isi_jimpitan) || 0;
+          const setoran = Number(item.setoran_regu) || 0;
+          const tunggakan = Number(item.tunggakan_bln_lalu) || 0;
+
+          return {
+            id: item.id || `jr-${index}`,
+            no: index + 1,
+            nama: namaVal,
+            nama_warga: namaVal,
+            blok: blokVal,
+            no_rumah: blokVal,
+            denda_ronda: denda,
+            bagi_jimpitan: bagi,
+            tdk_isi_jimpitan: tdkIsi,
+            setoran_regu: setoran,
+            tunggakan_bln_lalu: tunggakan,
+            jumlah: denda + bagi + tdkIsi + setoran + tunggakan,
+            status: item.status === 'lunas' ? 'lunas' : 'terutang',
+            keterangan: item.keterangan || '',
+          };
+        });
+
+        setRekapJimpitan(mappedRekap);
+      } else if (fetchedWarga.length > 0) {
+        // Fallback: Jika jimpitan_denda kosong, tampilkan daftar warga lengkap di rekap
+        const defaultRekap: RekapJimpitanRondaEntry[] = fetchedWarga.map((w, index) => ({
+          id: w.id,
+          no: index + 1,
+          nama: w.nama,
+          nama_warga: w.nama,
+          blok: w.no_rumah || '-',
+          no_rumah: w.no_rumah || '-',
+          denda_ronda: 0,
+          bagi_jimpitan: 0,
+          tdk_isi_jimpitan: 0,
+          setoran_regu: 0,
+          tunggakan_bln_lalu: 0,
+          jumlah: 0,
+          status: 'lunas',
+        }));
+        setRekapJimpitan(defaultRekap);
+      }
+
+      if (nRes.status === 'fulfilled' && nRes.value.data && nRes.value.data.length > 0) {
+        setNotulen(nRes.value.data);
+      }
       setSupabaseConnected(true);
     } catch (err) {
-      console.warn('Supabase sync note: using local cache', err);
+      console.warn('Supabase sync note: fallback to local cache', err);
     } finally {
       setIsSyncing(false);
     }
@@ -176,18 +332,17 @@ export function useRWStore() {
 
   useEffect(() => {
     if (isSupabaseConfigured()) {
-      syncWithSupabase();
+      syncWithSupabase().catch((e) => console.error('Error saat sync awal:', e));
     }
   }, [syncWithSupabase]);
 
-  // Authenticate via Email & Password
   const loginWithEmail = (email: string, pass: string): boolean => {
+    if (!email || !users) return false;
     const found = users.find(
-      (u) => u.email.toLowerCase() === email.toLowerCase()
+      (u) => u.email && u.email.toLowerCase() === email.toLowerCase()
     );
 
     if (found) {
-      // Verifikasi kata sandi
       if (found.password && found.password !== pass) {
         return false;
       }
@@ -198,7 +353,7 @@ export function useRWStore() {
   };
 
   const switchUser = (user: UserProfile) => {
-    setCurrentUser(user);
+    if (user) setCurrentUser(user);
   };
 
   const switchRole = (role: UserRole) => {
@@ -230,7 +385,6 @@ export function useRWStore() {
     return created;
   };
 
-  // Generic Update User untuk Pengubahan Data dan Password
   const updateUser = (userId: string, updatedData: Partial<UserProfile> & { newPassword?: string }) => {
     setUsers((prev) =>
       prev.map((u) => {
@@ -246,7 +400,7 @@ export function useRWStore() {
       })
     );
 
-    if (currentUser.id === userId) {
+    if (currentUser && currentUser.id === userId) {
       setCurrentUser((prev) => {
         const updated = { ...prev, ...updatedData };
         if (updatedData.newPassword) {
@@ -291,7 +445,7 @@ export function useRWStore() {
       ...data,
       id: `kas-${Date.now()}`,
       created_at: new Date().toISOString(),
-      created_by: currentUser.id,
+      created_by: currentUser?.id || 'sys',
     };
     setKasRW((prev) => [item, ...prev]);
     return item;
@@ -306,7 +460,7 @@ export function useRWStore() {
       ...data,
       id: `kop-${Date.now()}`,
       created_at: new Date().toISOString(),
-      created_by: currentUser.id,
+      created_by: currentUser?.id || 'sys',
     };
     setKoperasi((prev) => [item, ...prev]);
     return item;
@@ -331,7 +485,7 @@ export function useRWStore() {
       ...data,
       id: `jmp-${Date.now()}`,
       created_at: new Date().toISOString(),
-      created_by: currentUser.id,
+      created_by: currentUser?.id || 'sys',
     };
     setJimpitan((prev) => [item, ...prev]);
     return item;
@@ -344,7 +498,7 @@ export function useRWStore() {
       ...it,
       id: `jmp-csv-${Date.now()}-${idx}`,
       created_at: new Date().toISOString(),
-      created_by: currentUser.id,
+      created_by: currentUser?.id || 'sys',
     }));
     setJimpitan((prev) => [...newItems, ...prev]);
     return newItems.length;
@@ -356,15 +510,22 @@ export function useRWStore() {
     );
   };
 
+  // --- HENDEL NOTULEN DAN PENGUMUMAN ---
   const addNotulen = (data: Omit<Notulen, 'id' | 'created_at'>) => {
     const item: Notulen = {
       ...data,
       id: `not-${Date.now()}`,
       created_at: new Date().toISOString(),
-      created_by: currentUser.id,
+      created_by: currentUser?.id || 'sys',
     };
     setNotulen((prev) => [item, ...prev]);
     return item;
+  };
+
+  const updateNotulen = (id: string, data: Partial<Notulen>) => {
+    setNotulen((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, ...data } : n))
+    );
   };
 
   const updateNotulenStatus = (id: string, status: 'draft' | 'published') => {
@@ -378,33 +539,24 @@ export function useRWStore() {
   };
 
   const resetToDemoData = () => {
-    localStorage.removeItem('simrw_users');
-    localStorage.removeItem('simrw_warga');
-    localStorage.removeItem('simrw_kas');
-    localStorage.removeItem('simrw_koperasi');
-    localStorage.removeItem('simrw_jimpitan');
-    localStorage.removeItem('simrw_notulen');
-    localStorage.removeItem('simrw_rekap_jimpitan_rw44');
-    localStorage.removeItem('simrw_kelompok_ronda_rw44');
-    localStorage.removeItem('simrw_rincian_arisan_rw44');
-    localStorage.removeItem('simrw_agenda_arisan_rw44');
+    localStorage.clear();
     
-    const initialWithPwd = INITIAL_USERS.map((u) => ({
+    const initialWithPwd = (INITIAL_USERS || []).map((u) => ({
       ...u,
       password: u.password || 'password123',
     }));
 
     setUsers(initialWithPwd);
     setCurrentUser(initialWithPwd[0]);
-    setWarga(INITIAL_WARGA);
-    setKasRW(INITIAL_KAS_RW);
-    setKoperasi(INITIAL_KOPERASI);
-    setJimpitan(INITIAL_JIMPITAN);
-    setNotulen(INITIAL_NOTULEN);
-    setRekapJimpitan(INITIAL_REKAP_JIMPITAN_RONDA);
-    setKelompokRonda(INITIAL_KELOMPOK_RONDA);
-    setRincianArisan(INITIAL_RINCIAN_ARISAN_RW44);
-    setAgendaArisan(AGENDA_ARISAN_RW44);
+    setWarga(INITIAL_WARGA || []);
+    setKasRW(INITIAL_KAS_RW || []);
+    setKoperasi(INITIAL_KOPERASI || []);
+    setJimpitan(INITIAL_JIMPITAN || []);
+    setNotulen(INITIAL_NOTULEN || []);
+    setRekapJimpitan(INITIAL_REKAP_JIMPITAN_RONDA || []);
+    setKelompokRonda(INITIAL_KELOMPOK_RONDA || []);
+    setRincianArisan(INITIAL_RINCIAN_ARISAN_RW44 || []);
+    setAgendaArisan(AGENDA_ARISAN_RW44 || {});
   };
 
   const updateRekapJimpitanItem = (id: string, updated: Partial<RekapJimpitanRondaEntry>) => {
@@ -530,24 +682,25 @@ export function useRWStore() {
     setAgendaArisan((prev) => ({ ...prev, ...updated }));
   };
 
-  const getCombinedTagihan = (): CombinedTagihan[] => {
+  const getCombinedTagihan = useCallback((): CombinedTagihan[] => {
+    if (!Array.isArray(warga)) return [];
     return warga.map((w) => {
-      const wJimpitan = jimpitan.filter(
+      const wJimpitan = (jimpitan || []).filter(
         (j) =>
           (j.warga_id === w.id || j.no_rumah === w.no_rumah) &&
           j.status === 'terutang'
       );
       const totalJimpitan = wJimpitan
         .filter((j) => j.jenis === 'jimpitan')
-        .reduce((sum, j) => sum + j.nominal, 0);
+        .reduce((sum, j) => sum + (Number(j.nominal) || 0), 0);
       const totalDenda = wJimpitan
         .filter((j) => j.jenis === 'denda_ronda')
-        .reduce((sum, j) => sum + j.nominal, 0);
+        .reduce((sum, j) => sum + (Number(j.nominal) || 0), 0);
 
-      const wKoperasi = koperasi.filter(
+      const wKoperasi = (koperasi || []).filter(
         (k) => k.warga_id === w.id && k.status === 'belum_lunas'
       );
-      const totalKoperasi = wKoperasi.reduce((sum, k) => sum + k.nominal, 0);
+      const totalKoperasi = wKoperasi.reduce((sum, k) => sum + (Number(k.nominal) || 0), 0);
 
       const totalAll = totalJimpitan + totalDenda + totalKoperasi;
 
@@ -563,7 +716,7 @@ export function useRWStore() {
         status_pembayaran: totalAll === 0 ? 'Lunas' : 'Ada Tunggakan',
       };
     });
-  };
+  }, [warga, jimpitan, koperasi]);
 
   return {
     currentUser,
@@ -594,7 +747,7 @@ export function useRWStore() {
     markJimpitanLunas,
     rekapJimpitan,
     kelompokRonda,
-    rincianArisan,
+    rincianArisan: rincianArisanTerhubung, // <-- Mengembalikan data yang terhubung otomatis
     agendaArisan,
     updateRekapJimpitanItem,
     addRekapJimpitanItem,
@@ -607,6 +760,7 @@ export function useRWStore() {
     importRekapJimpitanCsvData,
     updateAgendaArisan,
     addNotulen,
+    updateNotulen,
     updateNotulenStatus,
     deleteNotulen,
     resetToDemoData,

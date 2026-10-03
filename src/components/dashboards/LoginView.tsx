@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UserRole, UserProfile } from '../../types';
-import { ShieldCheck, LogIn, Key, Mail, AlertCircle, Sparkles, UserCheck, Database } from 'lucide-react';
+import { ShieldCheck, LogIn, Key, Mail, AlertCircle, Sparkles, UserCheck, Database, Eye, EyeOff } from 'lucide-react';
 
 interface LoginViewProps {
   users: UserProfile[];
@@ -19,6 +19,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false); // State untuk toggle kata sandi
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -121,13 +122,24 @@ export const LoginView: React.FC<LoginViewProps> = ({
               <Key className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
               <input
                 id="input-login-password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                className="w-full pl-9 pr-10 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-blue-600 focus:outline-none"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 focus:outline-none"
+              >
+                {showPassword ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
+              </button>
             </div>
           </div>
 

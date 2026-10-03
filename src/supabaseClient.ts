@@ -1,10 +1,14 @@
-import { createClient } from '@supabase/supabase-js';
+import { getSupabase } from './lib/supabase';
 
-// Ambil URL dan Key dari environment variables, atau gunakan fallback string kosong
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+// Menggunakan getter agar client tidak langsung dieksekusi saat module di-import
+export const supabase = {
+  get auth() {
+    return getSupabase()?.auth;
+  },
+  get from() {
+    const client = getSupabase();
+    return client ? client.from.bind(client) : (() => ({} as any));
+  },
+};
 
-// Buat instance Supabase Client
-export const supabase = supabaseUrl && supabaseAnonKey
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+export default getSupabase;

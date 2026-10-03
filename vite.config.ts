@@ -16,7 +16,8 @@ export default defineConfig(() => {
           id: '/',
           name: 'Sistem Keuangan & Administrasi RW',
           short_name: 'SimRW',
-          description: 'Aplikasi PWA Manajemen Keuangan dan Administrasi Tingkat RW Terintegrasi Multi-Role',
+          description:
+            'Aplikasi PWA Manajemen Keuangan dan Administrasi Tingkat RW Terintegrasi Multi-Role',
           theme_color: '#1e3a8a',
           background_color: '#f8fafc',
           display: 'standalone',
@@ -45,6 +46,9 @@ export default defineConfig(() => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          cleanupOutdatedCaches: true, // Hapus file build lama (misal CSS 404) secara otomatis
+          skipWaiting: true,           // Langsung aktifkan Service Worker baru tanpa menunggu tab ditutup
+          clientsClaim: true,          // Mengontrol halaman secara langsung setelah Service Worker aktif
         },
         devOptions: {
           enabled: true,
@@ -58,12 +62,9 @@ export default defineConfig(() => {
       },
     },
     server: {
-      port: 5173, // Mengunci port default Vite agar konsisten
-      strictPort: false, // Jika 5173 terpakai, otomatis pindah ke port terdekat tanpa error
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify—file watching is disabled to prevent flickering during agent edits.
+      port: 5173,
+      strictPort: false,
       hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };

@@ -1,36 +1,15 @@
 import React from 'react';
-import { UserProfile, UserRole } from '../types';
-import { PWAInstallButton } from './PWAInstallButton';
-import {
-  ShieldCheck,
-  Database,
-  Code2,
-  FileCode,
-  UserCheck,
-  LogOut,
-  RefreshCw,
-  Sparkles,
-} from 'lucide-react';
+import { UserProfile } from '../types';
+import { Database, Download, LogOut, UserCheck } from 'lucide-react';
 
 interface NavbarProps {
-  currentUser: UserProfile;
+  currentUser: UserProfile | null;
   supabaseConnected: boolean;
   isSyncing: boolean;
   onOpenRoleSwitcher: () => void;
   onOpenSupabaseModal: () => void;
-  onOpenSqlModal: () => void;
-  onOpenNextjsModal: () => void;
   onLogout: () => void;
 }
-
-const ROLE_BADGES: Record<UserRole, { label: string; color: string }> = {
-  super_admin: { label: 'Super Admin', color: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
-  sekretaris: { label: 'Sekretaris RW', color: 'bg-blue-100 text-blue-700 border-blue-200' },
-  bendahara_rw: { label: 'Bendahara RW', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-  bendahara_koperasi: { label: 'Bendahara Koperasi', color: 'bg-amber-100 text-amber-700 border-amber-200' },
-  perekap_jimpitan: { label: 'Perekap Ronda', color: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
-  warga: { label: 'Warga Mandiri', color: 'bg-slate-100 text-slate-700 border-slate-200' },
-};
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentUser,
@@ -38,126 +17,86 @@ export const Navbar: React.FC<NavbarProps> = ({
   isSyncing,
   onOpenRoleSwitcher,
   onOpenSupabaseModal,
-  onOpenSqlModal,
-  onOpenNextjsModal,
   onLogout,
 }) => {
-  const badge = ROLE_BADGES[currentUser.role] || ROLE_BADGES.warga;
-
-  // Pengecekan apakah sedang dalam mode Development (lokal)
-  const isDev =
-    (typeof import.meta !== 'undefined' && import.meta.env?.DEV) ||
-    (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development');
-
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
-      <header className="flex flex-wrap justify-between items-center bg-white px-5 sm:px-6 py-3 rounded-2xl border border-slate-200 shadow-sm gap-3">
-        {/* Brand */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-xs">
-            RW
-          </div>
-          <div>
-            <h1 className="text-base sm:text-lg font-bold text-slate-800 leading-none">
-              Sistem Manajemen RW 44
-            </h1>
-            <p className="text-xs text-slate-500 mt-1">
-              Portal Administrasi & Keuangan Terpadu
-            </p>
-          </div>
-        </div>
-
-        {/* Action Center */}
-        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+    <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
           
-          {/* Tombol-tombol teknis developer hanya tampil saat lokal/dev */}
-          {isDev && (
-            <>
-              {/* Supabase Status / Config */}
-              <button
-                id="btn-nav-supabase-status"
-                onClick={onOpenSupabaseModal}
-                className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border transition ${
-                  supabaseConnected
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
-                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                }`}
-                title="Klik untuk konfigurasi URL & Key Supabase"
-              >
-                <Database className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{supabaseConnected ? 'Supabase Terhubung' : 'Demo Mode (Lokal)'}</span>
-                {isSyncing && <RefreshCw className="w-3 h-3 animate-spin text-slate-400" />}
-              </button>
-
-              {/* SQL Migration Script Viewer */}
-              <button
-                id="btn-nav-sql-migration"
-                onClick={onOpenSqlModal}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl border border-slate-200 transition"
-                title="Lihat Skema DDL & RLS Supabase"
-              >
-                <FileCode className="w-3.5 h-3.5 text-indigo-600" />
-                <span className="hidden sm:inline">SQL Migration</span>
-              </button>
-
-              {/* Next.js Code Exporter */}
-              <button
-                id="btn-nav-nextjs-code"
-                onClick={onOpenNextjsModal}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl border border-indigo-200 transition"
-                title="Lihat & Salin Kode Lengkap Next.js App Router"
-              >
-                <Code2 className="w-3.5 h-3.5 text-indigo-700" />
-                <span className="hidden sm:inline">Kode Next.js</span>
-              </button>
-            </>
-          )}
-
-          {/* PWA Install Button (Tetap dipasang agar warga bisa pasang aplikasi di HP) */}
-          <PWAInstallButton />
-
-          {/* User Role Card */}
-          <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
-            <div className="text-right hidden lg:block">
-              <p className="text-xs font-semibold text-slate-700 leading-tight">
-                {currentUser.nama || 'Pengguna SIM-RW'}
+          {/* Logo & Judul */}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-extrabold text-lg shadow-md shadow-indigo-200">
+              RW
+            </div>
+            <div>
+              <h1 className="font-bold text-slate-900 text-base leading-tight">
+                Sistem Manajemen RW 44
+              </h1>
+              <p className="text-[11px] font-medium text-slate-500">
+                Portal Administrasi & Keuangan Terpadu
               </p>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase border inline-block mt-0.5 ${badge.color}`}>
-                {badge.label}
-              </span>
+            </div>
+          </div>
+
+          {/* Action Items */}
+          <div className="flex items-center gap-2.5">
+            
+            {/* Status Supabase */}
+            <button
+              type="button"
+              onClick={onOpenSupabaseModal}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition shadow-xs ${
+                supabaseConnected
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100/70'
+                  : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100/70'
+              }`}
+            >
+              <Database className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>{supabaseConnected ? 'Supabase Terhubung' : 'Sambungkan DB'}</span>
+            </button>
+
+            {/* Tombol Install PWA */}
+            <button
+              type="button"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-semibold transition shadow-xs"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <span>Install PWA</span>
+            </button>
+
+            {/* Switcher Role & Logout */}
+            <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+              <button
+                type="button"
+                onClick={onOpenRoleSwitcher}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 transition text-left"
+              >
+                <div>
+                  <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                    {currentUser?.role?.replace('_', ' ') || 'warga'}
+                  </div>
+                  <div className="text-xs font-bold text-slate-800 leading-none">
+                    {currentUser?.nama || 'WARGA MANDIRI'}
+                  </div>
+                </div>
+                <UserCheck className="w-4 h-4 text-slate-500 ml-1" />
+              </button>
+
+              <button
+                type="button"
+                onClick={onLogout}
+                title="Keluar"
+                className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
 
-            {/* Tombol ganti role simulasi hanya tampil saat dev */}
-            {isDev ? (
-              <button
-                id="btn-nav-role-switcher"
-                onClick={onOpenRoleSwitcher}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border cursor-pointer hover:opacity-90 transition ${badge.color}`}
-                title="Ganti Role Simulasi / Uji Hak Akses"
-              >
-                <UserCheck className="w-3.5 h-3.5" />
-                <span className="lg:hidden">{badge.label}</span>
-                <Sparkles className="w-3 h-3 opacity-70" />
-              </button>
-            ) : (
-              /* Tampilan badge biasa untuk warga tanpa tombol klik ganti role */
-              <div className={`lg:hidden flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-xl border ${badge.color}`}>
-                <UserCheck className="w-3.5 h-3.5" />
-                <span>{badge.label}</span>
-              </div>
-            )}
-
-            <button
-              id="btn-nav-logout"
-              onClick={onLogout}
-              className="p-1.5 text-slate-400 hover:text-rose-600 rounded-xl hover:bg-rose-50 transition"
-              title="Keluar / Reset ke Halaman Login"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
           </div>
+
         </div>
-      </header>
-    </div>
+      </div>
+    </header>
   );
 };

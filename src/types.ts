@@ -11,7 +11,7 @@ export interface UserProfile {
   email: string;
   nama: string;
   role: UserRole;
-  password?: string; // Penambahan kolom password untuk otentikasi
+  password?: string;
   no_hp?: string;
   warga_id?: string;
   created_at: string;
@@ -85,12 +85,17 @@ export interface JimpitanDenda {
 
 export interface Notulen {
   id: string;
+  nomor_surat?: string;
   judul: string;
   kategori: 'Rapat Rutin' | 'Rapat Koordinasi' | 'Pengumuman' | 'Kerja Bakti' | 'Keamanan' | 'Lain-lain';
   tanggal: string;
   lokasi: string;
-  agenda: string;
+  pemimpin_rapat?: string;
+  peserta_hadir?: string[];
+  agenda?: string;
+  pembahasan?: string;
   isi_notulen: string;
+  hasil_keputusan?: string;
   kesepakatan?: string;
   lampiran_url?: string;
   status: 'draft' | 'published';
@@ -115,7 +120,9 @@ export interface RekapJimpitanRondaEntry {
   id: string;
   no: number;
   nama: string;
+  nama_warga?: string;
   blok: string;
+  no_rumah?: string;
   denda_ronda: number;
   bagi_jimpitan: number;
   tdk_isi_jimpitan: number;
@@ -123,9 +130,10 @@ export interface RekapJimpitanRondaEntry {
   tunggakan_bln_lalu: number;
   jumlah: number;
   status: 'lunas' | 'terutang';
-  bulan: string;
-  tahun: string;
+  bulan?: string;
+  tahun?: string;
   catatan?: string;
+  keterangan?: string;
 }
 
 export interface KelompokRonda {
@@ -161,9 +169,9 @@ export interface AgendaArisanRW {
   hari_tanggal: string;
   tempat: string;
   catatan_kebijakan: string;
-  total_koperasi: number;
-  total_ronda: number;
-  total_arisan: number;
-  total_iuran_rt: number;
-  total_keseluruhan: number;
+  total_koperasi?: number;
+  total_ronda?: number;
+  total_arisan?: number;
+  total_iuran_rt?: number;
+  total_keseluruhan?: number;
 }

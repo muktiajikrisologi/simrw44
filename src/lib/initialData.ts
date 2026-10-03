@@ -3,7 +3,7 @@ import { Warga, KasRW, Koperasi, JimpitanDenda, Notulen, UserProfile } from '../
 export const INITIAL_USERS: UserProfile[] = [
   {
     id: 'usr-admin-1',
-    nama: 'Bambang Supriyanto, S.E.',
+    nama: 'adminrw44',
     email: 'admin@rw05.id',
     role: 'super_admin',
     no_hp: '081234567890',

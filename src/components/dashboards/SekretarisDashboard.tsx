@@ -1,69 +1,25 @@
 import React, { useState, useRef } from 'react';
-import {
-  UserProfile,
-  Notulen,
-  CombinedTagihan,
-  RincianKewajibanArisan,
-  AgendaArisanRW,
-} from '../../types';
-import {
-  FileText,
-  ClipboardList,
-  PlusCircle,
-  Printer,
-  Search,
-  Filter,
-  CheckCircle2,
-  Calendar,
-  MapPin,
-  Trash2,
-  Share2,
-  Eye,
-  Layers,
-  Download,
-  Upload,
-  Coins,
-  Edit2,
-  Check,
-  X,
-  AlertCircle,
-} from 'lucide-react';
-import { INITIAL_RINCIAN_ARISAN_RW44, AGENDA_ARISAN_RW44 } from '../../lib/dataRW44';
+import { UserProfile, RincianKewajibanArisan } from '../../types';
+import { Search, PlusCircle, Download, Upload, Layers } from 'lucide-react';
+import { INITIAL_RINCIAN_ARISAN_RW44 } from '../../lib/dataRW44';
 
 interface SekretarisDashboardProps {
   currentUser: UserProfile;
-  notulen: Notulen[];
-  combinedTagihan: CombinedTagihan[];
-  onAddNotulen: (data: Omit<Notulen, 'id' | 'created_at'>) => void;
-  onUpdateNotulenStatus: (id: string, status: 'draft' | 'published') => void;
-  onDeleteNotulen: (id: string) => void;
   rincianArisan?: RincianKewajibanArisan[];
-  agendaArisan?: AgendaArisanRW;
   onUpdateRincianItem?: (id: string, updated: Partial<RincianKewajibanArisan>) => void;
   onAddRincianItem?: (item: Omit<RincianKewajibanArisan, 'id'>) => void;
   onToggleRincianStatus?: (id: string) => void;
   onImportRincianCsv?: (items: RincianKewajibanArisan[]) => number;
-  onUpdateAgenda?: (updated: Partial<AgendaArisanRW>) => void;
 }
 
 export const SekretarisDashboard: React.FC<SekretarisDashboardProps> = ({
-  currentUser,
-  notulen,
-  combinedTagihan,
-  onAddNotulen,
-  onUpdateNotulenStatus,
-  onDeleteNotulen,
   rincianArisan = INITIAL_RINCIAN_ARISAN_RW44,
-  agendaArisan = AGENDA_ARISAN_RW44,
   onUpdateRincianItem,
   onAddRincianItem,
   onToggleRincianStatus,
   onImportRincianCsv,
-  onUpdateAgenda,
 }) => {
-  const [activeTab, setActiveTab] = useState<'rekap_csv' | 'notulen' | 'agenda'>('rekap_csv');
-
-  // Filter rekap CSV
+  // Filter state
   const [searchWarga, setSearchWarga] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'lunas' | 'belum_lunas'>('all');
 
@@ -87,23 +43,6 @@ export const SekretarisDashboard: React.FC<SekretarisDashboardProps> = ({
   const [showImportModal, setShowImportModal] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Agenda Edit State
-  const [agendaTgl, setAgendaTgl] = useState(agendaArisan.hari_tanggal);
-  const [agendaTempat, setAgendaTempat] = useState(agendaArisan.tempat);
-  const [agendaCatatan, setAgendaCatatan] = useState(agendaArisan.catatan_kebijakan);
-  const [agendaSavedMsg, setAgendaSavedMsg] = useState(false);
-
-  // Notulen Form
-  const [showAddNotulen, setShowAddNotulen] = useState(false);
-  const [nJudul, setNJudul] = useState('');
-  const [nKategori, setNKategori] = useState<Notulen['kategori']>('Rapat Rutin');
-  const [nTanggal, setNTanggal] = useState(new Date().toISOString().split('T')[0]);
-  const [nLokasi, setNLokasi] = useState('Joglo RW 44');
-  const [nAgenda, setNAgenda] = useState('');
-  const [nIsi, setNIsi] = useState('');
-  const [nKesepakatan, setNKesepakatan] = useState('');
-  const [nStatus, setNStatus] = useState<'draft' | 'published'>('published');
 
   // Filtered List
   const filteredList = rincianArisan.filter((item) => {
@@ -297,42 +236,6 @@ export const SekretarisDashboard: React.FC<SekretarisDashboardProps> = ({
     reader.readAsText(file);
   };
 
-  const handleSaveAgenda = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (onUpdateAgenda) {
-      onUpdateAgenda({
-        hari_tanggal: agendaTgl,
-        tempat: agendaTempat,
-        catatan_kebijakan: agendaCatatan,
-      });
-      setAgendaSavedMsg(true);
-      setTimeout(() => setAgendaSavedMsg(false), 2500);
-    }
-  };
-
-  const handleSaveNotulen = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!nJudul || !nIsi) return;
-    onAddNotulen({
-      nomor_surat: `NOT/RW44/${new Date().getFullYear()}/${String(notulen.length + 1).padStart(3, '0')}`,
-      judul: nJudul,
-      kategori: nKategori,
-      tanggal: nTanggal,
-      tempat: nLokasi,
-      pemimpin_rapat: currentUser.name,
-      peserta_hadir: ['Ketua RW', 'Sekretaris', 'Bendahara RW', 'Perwakilan RT', 'Warga'],
-      agenda: nAgenda || nJudul,
-      pembahasan: nIsi,
-      hasil_keputusan: nKesepakatan || nIsi,
-      status: nStatus,
-    });
-    setNJudul('');
-    setNAgenda('');
-    setNIsi('');
-    setNKesepakatan('');
-    setShowAddNotulen(false);
-  };
-
   return (
     <div className="space-y-6 pb-12" id="sekretaris-screen">
       {/* Header Banner */}
@@ -353,7 +256,7 @@ export const SekretarisDashboard: React.FC<SekretarisDashboardProps> = ({
                 Perekapan Arisan, Jimpitan & Administrasi RW
               </h1>
               <p className="text-xs sm:text-sm text-slate-600 mt-1">
-                Integrasi rekapitulasi data dari Bendahara Jimpitan & Bendahara Koperasi untuk dipublikasikan langsung ke Dashboard Warga.
+                Kelola rekapitulasi kewajiban warga. Data ini otomatis tersambung ke menu <strong>Info Iuran</strong> warga.
               </p>
             </div>
           </div>
@@ -385,7 +288,7 @@ export const SekretarisDashboard: React.FC<SekretarisDashboardProps> = ({
           </div>
         </div>
 
-        {/* Bento Metrics from Consolidated CSV */}
+        {/* Bento Metrics */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-6">
           <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
             <span className="text-[11px] font-semibold text-slate-500 uppercase block">Koperasi</span>
@@ -431,472 +334,291 @@ export const SekretarisDashboard: React.FC<SekretarisDashboardProps> = ({
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2">
-        <button
-          onClick={() => setActiveTab('rekap_csv')}
-          className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 ${
-            activeTab === 'rekap_csv'
-              ? 'bg-blue-700 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Layers className="w-4 h-4" />
-          <span>I. Rekapitulasi Kewajiban Arisan & Ronda (CSV Publikasi)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('agenda')}
-          className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 ${
-            activeTab === 'agenda'
-              ? 'bg-blue-700 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Calendar className="w-4 h-4" />
-          <span>II. Jadwal Pertemuan & Kebijakan Arisan</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('notulen')}
-          className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 ${
-            activeTab === 'notulen'
-              ? 'bg-blue-700 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <FileText className="w-4 h-4" />
-          <span>III. Notulen Musyawarah Warga</span>
-        </button>
-      </div>
-
-      {/* TAB 1: CSV REKAPITULASI KEWAJIBAN */}
-      {activeTab === 'rekap_csv' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-          {/* Controls */}
-          <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-              <div className="relative flex-1 sm:w-64">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Cari nama / blok rumah..."
-                  value={searchWarga}
-                  onChange={(e) => setSearchWarga(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="bg-white border border-slate-300 rounded-lg text-xs text-slate-700 px-3 py-1.5 outline-none"
-              >
-                <option value="all">Semua Status</option>
-                <option value="lunas">Lunas</option>
-                <option value="belum_lunas">Belum Lunas</option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-              <span className="text-xs text-slate-500">
-                Menampilkan {filteredList.length} dari {rincianArisan.length} Warga
-              </span>
-            </div>
-          </div>
-
-          {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[1000px]">
-              <thead>
-                <tr className="bg-slate-100 text-slate-800 border-b border-slate-300 text-xs font-bold uppercase">
-                  <th className="py-3 px-3 w-12 text-center border-r border-slate-200">NO</th>
-                  <th className="py-3 px-4 border-r border-slate-200 min-w-[160px]">NAMA WARGA</th>
-                  <th className="py-3 px-3 border-r border-slate-200 text-center w-20">BLOK</th>
-                  <th className="py-3 px-3 border-r border-slate-200 text-center w-20">ANGS. KE</th>
-                  <th className="py-3 px-3 border-r border-slate-200 text-center w-24">TGL CAIR</th>
-                  <th className="py-3 px-3 border-r border-slate-200 text-right">KOPERASI</th>
-                  <th className="py-3 px-3 border-r border-slate-200 text-right">RONDA</th>
-                  <th className="py-3 px-3 border-r border-slate-200 text-right">ARISAN</th>
-                  <th className="py-3 px-3 border-r border-slate-200 text-right">IURAN RT</th>
-                  <th className="py-3 px-4 border-r border-slate-200 text-right bg-blue-50/50">
-                    JUMLAH KEWAJIBAN
-                  </th>
-                  <th className="py-3 px-3 text-center w-36">STATUS & AKSI</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 text-xs">
-                {filteredList.map((item, idx) => {
-                  const isEditing = editingId === item.id;
-
-                  return (
-                    <tr
-                      key={item.id}
-                      className={`hover:bg-slate-50 transition-colors ${
-                        item.status_bayar === 'lunas' ? 'bg-emerald-50/20' : 'bg-white'
-                      }`}
-                    >
-                      <td className="py-2.5 px-3 text-center font-mono text-slate-500 border-r border-slate-200">
-                        {item.no || idx + 1}
-                      </td>
-                      <td className="py-2.5 px-4 font-semibold text-slate-900 border-r border-slate-200">
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={editForm.nama || ''}
-                            onChange={(e) => setEditForm({ ...editForm, nama: e.target.value })}
-                            className="w-full px-2 py-1 border border-slate-300 rounded text-xs"
-                          />
-                        ) : (
-                          item.nama
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3 text-center font-mono border-r border-slate-200">
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={editForm.blok_rumah || ''}
-                            onChange={(e) =>
-                              setEditForm({ ...editForm, blok_rumah: e.target.value })
-                            }
-                            className="w-16 px-1 py-1 border border-slate-300 rounded text-xs text-center font-mono"
-                          />
-                        ) : (
-                          <span className="bg-slate-100 px-2 py-0.5 rounded text-[11px]">
-                            {item.blok_rumah}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3 text-center font-mono text-slate-600 border-r border-slate-200">
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={editForm.angsuran_ke || ''}
-                            onChange={(e) =>
-                              setEditForm({ ...editForm, angsuran_ke: e.target.value })
-                            }
-                            className="w-12 px-1 py-1 border border-slate-300 rounded text-xs text-center font-mono"
-                          />
-                        ) : (
-                          item.angsuran_ke || '-'
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3 text-center font-mono text-slate-500 border-r border-slate-200 text-[11px]">
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={editForm.tgl_cair || ''}
-                            onChange={(e) =>
-                              setEditForm({ ...editForm, tgl_cair: e.target.value })
-                            }
-                            className="w-20 px-1 py-1 border border-slate-300 rounded text-xs text-center font-mono"
-                          />
-                        ) : (
-                          item.tgl_cair || '-'
-                        )}
-                      </td>
-
-                      {/* Koperasi */}
-                      <td className="py-2.5 px-3 text-right font-mono border-r border-slate-200">
-                        {isEditing ? (
-                          <input
-                            type="number"
-                            value={editForm.angsuran_koperasi || 0}
-                            onChange={(e) =>
-                              setEditForm({
-                                ...editForm,
-                                angsuran_koperasi: Number(e.target.value),
-                              })
-                            }
-                            className="w-20 px-1 py-1 border border-slate-300 rounded text-xs text-right font-mono"
-                          />
-                        ) : item.angsuran_koperasi > 0 ? (
-                          <span>Rp {item.angsuran_koperasi.toLocaleString('id-ID')}</span>
-                        ) : (
-                          <span className="text-slate-400">0</span>
-                        )}
-                      </td>
-
-                      {/* Ronda */}
-                      <td className="py-2.5 px-3 text-right font-mono border-r border-slate-200">
-                        {isEditing ? (
-                          <input
-                            type="number"
-                            value={editForm.jmlh_kewajiban_ronda || 0}
-                            onChange={(e) =>
-                              setEditForm({
-                                ...editForm,
-                                jmlh_kewajiban_ronda: Number(e.target.value),
-                              })
-                            }
-                            className="w-16 px-1 py-1 border border-slate-300 rounded text-xs text-right font-mono"
-                          />
-                        ) : item.jmlh_kewajiban_ronda > 0 ? (
-                          <span className="text-amber-700 font-semibold">
-                            Rp {item.jmlh_kewajiban_ronda.toLocaleString('id-ID')}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">0</span>
-                        )}
-                      </td>
-
-                      {/* Arisan */}
-                      <td className="py-2.5 px-3 text-right font-mono border-r border-slate-200">
-                        {isEditing ? (
-                          <input
-                            type="number"
-                            value={editForm.arisan || 0}
-                            onChange={(e) =>
-                              setEditForm({ ...editForm, arisan: Number(e.target.value) })
-                            }
-                            className="w-16 px-1 py-1 border border-slate-300 rounded text-xs text-right font-mono"
-                          />
-                        ) : item.arisan > 0 ? (
-                          <span>Rp {item.arisan.toLocaleString('id-ID')}</span>
-                        ) : (
-                          <span className="text-slate-400">0</span>
-                        )}
-                      </td>
-
-                      {/* Iuran RT */}
-                      <td className="py-2.5 px-3 text-right font-mono border-r border-slate-200">
-                        {isEditing ? (
-                          <input
-                            type="number"
-                            value={editForm.iuran_rt || 0}
-                            onChange={(e) =>
-                              setEditForm({ ...editForm, iuran_rt: Number(e.target.value) })
-                            }
-                            className="w-16 px-1 py-1 border border-slate-300 rounded text-xs text-right font-mono"
-                          />
-                        ) : item.iuran_rt > 0 ? (
-                          <span>Rp {item.iuran_rt.toLocaleString('id-ID')}</span>
-                        ) : (
-                          <span className="text-slate-400">0</span>
-                        )}
-                      </td>
-
-                      {/* Grand Total */}
-                      <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900 border-r border-slate-200 bg-slate-50/50">
-                        Rp {item.jumlah_kewajiban.toLocaleString('id-ID')}
-                      </td>
-
-                      {/* Action */}
-                      <td className="py-2.5 px-3 text-center">
-                        {isEditing ? (
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              onClick={handleSaveEdit}
-                              className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-semibold"
-                            >
-                              Simpan
-                            </button>
-                            <button
-                              onClick={() => {
-                                setEditingId(null);
-                                setEditForm({});
-                              }}
-                              className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-[10px]"
-                            >
-                              Batal
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              onClick={() => onToggleRincianStatus && onToggleRincianStatus(item.id)}
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
-                                item.status_bayar === 'lunas'
-                                  ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                                  : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-                              }`}
-                              title="Ubah status bayar"
-                            >
-                              {item.status_bayar === 'lunas' ? 'LUNAS' : 'BELUM'}
-                            </button>
-
-                            <button
-                              onClick={() => handleStartEdit(item)}
-                              className="text-slate-400 hover:text-blue-700 text-[11px] underline"
-                            >
-                              Edit
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="bg-slate-100 font-bold text-slate-900 text-xs border-t-2 border-slate-300">
-                  <td colSpan={5} className="py-3 px-4 text-center uppercase tracking-wider border-r border-slate-200">
-                    JUMLAH TOTAL REKAPITULASI ARISAN RW 44
-                  </td>
-                  <td className="py-3 px-3 text-right font-mono border-r border-slate-200">
-                    Rp {totalKoperasi.toLocaleString('id-ID')}
-                  </td>
-                  <td className="py-3 px-3 text-right font-mono border-r border-slate-200 text-amber-900">
-                    Rp {totalRonda.toLocaleString('id-ID')}
-                  </td>
-                  <td className="py-3 px-3 text-right font-mono border-r border-slate-200">
-                    Rp {totalArisan.toLocaleString('id-ID')}
-                  </td>
-                  <td className="py-3 px-3 text-right font-mono border-r border-slate-200">
-                    Rp {totalIuranRt.toLocaleString('id-ID')}
-                  </td>
-                  <td className="py-3 px-4 text-right font-mono text-sm bg-blue-100/70 text-blue-950 border-r border-slate-200">
-                    Rp {grandTotal.toLocaleString('id-ID')}
-                  </td>
-                  <td className="py-3 px-3 text-center text-slate-500 font-normal text-[11px]">
-                    {rincianArisan.length} KK
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: JADWAL AGENDA ARISAN & KEBIJAKAN */}
-      {activeTab === 'agenda' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 max-w-2xl">
-          <h3 className="text-base font-bold text-slate-900 mb-1">
-            Konfigurasi Agenda Pertemuan & Kebijakan Arisan RW
-          </h3>
-          <p className="text-xs text-slate-500 mb-6">
-            Informasi ini akan langsung ditampilkan pada banner atas Portal Warga dan slip kewajiban arisan.
-          </p>
-
-          <form onSubmit={handleSaveAgenda} className="space-y-4 text-xs">
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">Hari & Tanggal Pertemuan *</label>
+      {/* Main Table Content */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        {/* Controls */}
+        <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+            <div className="relative flex-1 sm:w-64">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                required
-                value={agendaTgl}
-                onChange={(e) => setAgendaTgl(e.target.value)}
-                placeholder="Contoh: SABTU, 06-Sep-25"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                placeholder="Cari nama / blok rumah..."
+                value={searchWarga}
+                onChange={(e) => setSearchWarga(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
 
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">Lokasi / Tempat Pertemuan *</label>
-              <input
-                type="text"
-                required
-                value={agendaTempat}
-                onChange={(e) => setAgendaTempat(e.target.value)}
-                placeholder="Contoh: JOGLO RW 44 ( BP. Agus Riyanto )"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-              />
-            </div>
-
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">Catatan Kebijakan Pengurus *</label>
-              <textarea
-                rows={3}
-                required
-                value={agendaCatatan}
-                onChange={(e) => setAgendaCatatan(e.target.value)}
-                placeholder="Contoh: PINJAMAN DI RESCEDULLING SEMUA PER DESEMBER 2024..."
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed font-mono text-[11px]"
-              />
-            </div>
-
-            <div className="pt-2 flex items-center justify-between">
-              {agendaSavedMsg && (
-                <span className="text-emerald-700 font-semibold text-xs flex items-center gap-1">
-                  <Check className="w-4 h-4" /> Berhasil disimpan dan diperbarui!
-                </span>
-              )}
-              <div className="ml-auto">
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white font-semibold rounded-lg shadow-xs"
-                >
-                  Simpan Agenda
-                </button>
-              </div>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* TAB 3: NOTULEN MUSYAWARAH */}
-      {activeTab === 'notulen' && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200">
-            <div>
-              <h3 className="font-bold text-slate-900 text-sm">Arsip Notulensi Rapat RW 44</h3>
-              <p className="text-xs text-slate-500">
-                Pencatatan resmi berita acara rapat, absensi pengurus, dan hasil keputusan bersama.
-              </p>
-            </div>
-            <button
-              onClick={() => setShowAddNotulen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded-lg"
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="bg-white border border-slate-300 rounded-lg text-xs text-slate-700 px-3 py-1.5 outline-none"
             >
-              <PlusCircle className="w-3.5 h-3.5" />
-              <span>Buat Notulen Baru</span>
-            </button>
+              <option value="all">Semua Status</option>
+              <option value="lunas">Lunas</option>
+              <option value="belum_lunas">Belum Lunas</option>
+            </select>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {notulen.map((item) => (
-              <div key={item.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs font-bold text-blue-800">{item.nomor_surat}</span>
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      item.status === 'published'
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-slate-100 text-slate-700'
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <span className="text-xs text-slate-500">
+              Menampilkan {filteredList.length} dari {rincianArisan.length} Warga
+            </span>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[1000px]">
+            <thead>
+              <tr className="bg-slate-100 text-slate-800 border-b border-slate-300 text-xs font-bold uppercase">
+                <th className="py-3 px-3 w-12 text-center border-r border-slate-200">NO</th>
+                <th className="py-3 px-4 border-r border-slate-200 min-w-[160px]">NAMA WARGA</th>
+                <th className="py-3 px-3 border-r border-slate-200 text-center w-20">BLOK</th>
+                <th className="py-3 px-3 border-r border-slate-200 text-center w-20">ANGS. KE</th>
+                <th className="py-3 px-3 border-r border-slate-200 text-center w-24">TGL CAIR</th>
+                <th className="py-3 px-3 border-r border-slate-200 text-right">KOPERASI</th>
+                <th className="py-3 px-3 border-r border-slate-200 text-right">RONDA</th>
+                <th className="py-3 px-3 border-r border-slate-200 text-right">ARISAN</th>
+                <th className="py-3 px-3 border-r border-slate-200 text-right">IURAN RT</th>
+                <th className="py-3 px-4 border-r border-slate-200 text-right bg-blue-50/50">
+                  JUMLAH KEWAJIBAN
+                </th>
+                <th className="py-3 px-3 text-center w-36">STATUS & AKSI</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 text-xs">
+              {filteredList.map((item, idx) => {
+                const isEditing = editingId === item.id;
+
+                return (
+                  <tr
+                    key={item.id}
+                    className={`hover:bg-slate-50 transition-colors ${
+                      item.status_bayar === 'lunas' ? 'bg-emerald-50/20' : 'bg-white'
                     }`}
                   >
-                    {item.status.toUpperCase()}
-                  </span>
-                </div>
+                    <td className="py-2.5 px-3 text-center font-mono text-slate-500 border-r border-slate-200">
+                      {item.no || idx + 1}
+                    </td>
+                    <td className="py-2.5 px-4 font-semibold text-slate-900 border-r border-slate-200">
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editForm.nama || ''}
+                          onChange={(e) => setEditForm({ ...editForm, nama: e.target.value })}
+                          className="w-full px-2 py-1 border border-slate-300 rounded text-xs"
+                        />
+                      ) : (
+                        item.nama
+                      )}
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-mono border-r border-slate-200">
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editForm.blok_rumah || ''}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, blok_rumah: e.target.value })
+                          }
+                          className="w-16 px-1 py-1 border border-slate-300 rounded text-xs text-center font-mono"
+                        />
+                      ) : (
+                        <span className="bg-slate-100 px-2 py-0.5 rounded text-[11px]">
+                          {item.blok_rumah}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-mono text-slate-600 border-r border-slate-200">
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editForm.angsuran_ke || ''}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, angsuran_ke: e.target.value })
+                          }
+                          className="w-12 px-1 py-1 border border-slate-300 rounded text-xs text-center font-mono"
+                        />
+                      ) : (
+                        item.angsuran_ke || '-'
+                      )}
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-mono text-slate-500 border-r border-slate-200 text-[11px]">
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editForm.tgl_cair || ''}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, tgl_cair: e.target.value })
+                          }
+                          className="w-20 px-1 py-1 border border-slate-300 rounded text-xs text-center font-mono"
+                        />
+                      ) : (
+                        item.tgl_cair || '-'
+                      )}
+                    </td>
 
-                <h4 className="font-bold text-slate-900 text-sm">{item.judul}</h4>
-                <div className="text-xs text-slate-600 flex items-center gap-3">
-                  <span>{item.tanggal}</span>
-                  <span>•</span>
-                  <span>{item.tempat}</span>
-                </div>
+                    {/* Koperasi */}
+                    <td className="py-2.5 px-3 text-right font-mono border-r border-slate-200">
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          value={editForm.angsuran_koperasi || 0}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              angsuran_koperasi: Number(e.target.value),
+                            })
+                          }
+                          className="w-20 px-1 py-1 border border-slate-300 rounded text-xs text-right font-mono"
+                        />
+                      ) : item.angsuran_koperasi > 0 ? (
+                        <span>Rp {item.angsuran_koperasi.toLocaleString('id-ID')}</span>
+                      ) : (
+                        <span className="text-slate-400">0</span>
+                      )}
+                    </td>
 
-                <p className="text-xs text-slate-700 bg-slate-50 p-2.5 rounded-lg border border-slate-100 line-clamp-3">
-                  {item.hasil_keputusan}
-                </p>
+                    {/* Ronda */}
+                    <td className="py-2.5 px-3 text-right font-mono border-r border-slate-200">
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          value={editForm.jmlh_kewajiban_ronda || 0}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              jmlh_kewajiban_ronda: Number(e.target.value),
+                            })
+                          }
+                          className="w-16 px-1 py-1 border border-slate-300 rounded text-xs text-right font-mono"
+                        />
+                      ) : item.jmlh_kewajiban_ronda > 0 ? (
+                        <span className="text-amber-700 font-semibold">
+                          Rp {item.jmlh_kewajiban_ronda.toLocaleString('id-ID')}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">0</span>
+                      )}
+                    </td>
 
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
-                  <span className="text-slate-400 text-[11px]">Oleh: {item.pemimpin_rapat}</span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() =>
-                        onUpdateNotulenStatus(
-                          item.id,
-                          item.status === 'published' ? 'draft' : 'published'
-                        )
-                      }
-                      className="text-xs text-blue-700 hover:text-blue-900 font-semibold"
-                    >
-                      {item.status === 'published' ? 'Jadikan Draft' : 'Publikasikan'}
-                    </button>
-                    <button
-                      onClick={() => onDeleteNotulen(item.id)}
-                      className="text-rose-500 hover:text-rose-700 p-1"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                    {/* Arisan */}
+                    <td className="py-2.5 px-3 text-right font-mono border-r border-slate-200">
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          value={editForm.arisan || 0}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, arisan: Number(e.target.value) })
+                          }
+                          className="w-16 px-1 py-1 border border-slate-300 rounded text-xs text-right font-mono"
+                        />
+                      ) : item.arisan > 0 ? (
+                        <span>Rp {item.arisan.toLocaleString('id-ID')}</span>
+                      ) : (
+                        <span className="text-slate-400">0</span>
+                      )}
+                    </td>
+
+                    {/* Iuran RT */}
+                    <td className="py-2.5 px-3 text-right font-mono border-r border-slate-200">
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          value={editForm.iuran_rt || 0}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, iuran_rt: Number(e.target.value) })
+                          }
+                          className="w-16 px-1 py-1 border border-slate-300 rounded text-xs text-right font-mono"
+                        />
+                      ) : item.iuran_rt > 0 ? (
+                        <span>Rp {item.iuran_rt.toLocaleString('id-ID')}</span>
+                      ) : (
+                        <span className="text-slate-400">0</span>
+                      )}
+                    </td>
+
+                    {/* Grand Total */}
+                    <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900 border-r border-slate-200 bg-slate-50/50">
+                      Rp {item.jumlah_kewajiban.toLocaleString('id-ID')}
+                    </td>
+
+                    {/* Action */}
+                    <td className="py-2.5 px-3 text-center">
+                      {isEditing ? (
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={handleSaveEdit}
+                            className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-semibold"
+                          >
+                            Simpan
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingId(null);
+                              setEditForm({});
+                            }}
+                            className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-[10px]"
+                          >
+                            Batal
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => onToggleRincianStatus && onToggleRincianStatus(item.id)}
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+                              item.status_bayar === 'lunas'
+                                ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                                : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                            }`}
+                            title="Ubah status bayar"
+                          >
+                            {item.status_bayar === 'lunas' ? 'LUNAS' : 'BELUM'}
+                          </button>
+
+                          <button
+                            onClick={() => handleStartEdit(item)}
+                            className="text-slate-400 hover:text-blue-700 text-[11px] underline"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="bg-slate-100 font-bold text-slate-900 text-xs border-t-2 border-slate-300">
+                <td colSpan={5} className="py-3 px-4 text-center uppercase tracking-wider border-r border-slate-200">
+                  JUMLAH TOTAL REKAPITULASI ARISAN RW 44
+                </td>
+                <td className="py-3 px-3 text-right font-mono border-r border-slate-200">
+                  Rp {totalKoperasi.toLocaleString('id-ID')}
+                </td>
+                <td className="py-3 px-3 text-right font-mono border-r border-slate-200 text-amber-900">
+                  Rp {totalRonda.toLocaleString('id-ID')}
+                </td>
+                <td className="py-3 px-3 text-right font-mono border-r border-slate-200">
+                  Rp {totalArisan.toLocaleString('id-ID')}
+                </td>
+                <td className="py-3 px-3 text-right font-mono border-r border-slate-200">
+                  Rp {totalIuranRt.toLocaleString('id-ID')}
+                </td>
+                <td className="py-3 px-4 text-right font-mono text-sm bg-blue-100/70 text-blue-950 border-r border-slate-200">
+                  Rp {grandTotal.toLocaleString('id-ID')}
+                </td>
+                <td className="py-3 px-3 text-center text-slate-500 font-normal text-[11px]">
+                  {rincianArisan.length} KK
+                </td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
-      )}
+      </div>
 
       {/* Modal Add Warga Row */}
       {showAddModal && (
@@ -905,7 +627,7 @@ export const SekretarisDashboard: React.FC<SekretarisDashboardProps> = ({
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-bold text-slate-900 text-sm">Tambah Data Warga ke Rekap Arisan</h3>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-4 h-4" />
+                ✕
               </button>
             </div>
 
@@ -1011,7 +733,7 @@ export const SekretarisDashboard: React.FC<SekretarisDashboardProps> = ({
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-bold text-slate-900 text-sm">Import CSV Rekap Arisan RW 44</h3>
               <button onClick={() => setShowImportModal(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-4 h-4" />
+                ✕
               </button>
             </div>
 
@@ -1055,96 +777,6 @@ export const SekretarisDashboard: React.FC<SekretarisDashboardProps> = ({
                 Tutup
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Add Notulen */}
-      {showAddNotulen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-xl w-full p-6 text-xs animate-in fade-in">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-900 text-sm">Buat Notulensi Musyawarah Baru</h3>
-              <button onClick={() => setShowAddNotulen(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveNotulen} className="space-y-3 mt-4">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Judul Musyawarah / Agenda *</label>
-                <input
-                  type="text"
-                  required
-                  value={nJudul}
-                  onChange={(e) => setNJudul(e.target.value)}
-                  placeholder="Contoh: Rapat Evaluasi Ronda & Arisan Periode September"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Tanggal *</label>
-                  <input
-                    type="date"
-                    required
-                    value={nTanggal}
-                    onChange={(e) => setNTanggal(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Lokasi *</label>
-                  <input
-                    type="text"
-                    required
-                    value={nLokasi}
-                    onChange={(e) => setNLokasi(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Hasil Keputusan Bersama *</label>
-                <textarea
-                  rows={4}
-                  required
-                  value={nIsi}
-                  onChange={(e) => setNIsi(e.target.value)}
-                  placeholder="Catat poin-poin kesepakatan warga..."
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg leading-relaxed"
-                />
-              </div>
-
-              <div className="flex items-center justify-between pt-2">
-                <select
-                  value={nStatus}
-                  onChange={(e) => setNStatus(e.target.value as any)}
-                  className="px-2.5 py-1.5 border border-slate-300 rounded-lg"
-                >
-                  <option value="published">Langsung Publikasikan ke Warga</option>
-                  <option value="draft">Simpan Sebagai Draft</option>
-                </select>
-
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddNotulen(false)}
-                    className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold"
-                  >
-                    Simpan Notulen
-                  </button>
-                </div>
-              </div>
-            </form>
           </div>
         </div>
       )}
