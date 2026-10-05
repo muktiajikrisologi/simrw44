@@ -25,6 +25,7 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
   const [loading, setLoading] = useState(false);
 
   // Form State
+  const [tanggal, setTanggal] = useState<string>(new Date().toISOString().split('T')[0]);
   const [judul, setJudul] = useState('');
   const [isi, setIsi] = useState('');
   const [status, setStatus] = useState<'draft' | 'published'>('published');
@@ -46,11 +47,10 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!judul || !isi) return;
+    if (!judul || !isi || !tanggal) return;
 
     setLoading(true);
     const client = getSupabase();
-    const today = new Date().toISOString().split('T')[0];
 
     try {
       if (supabaseConnected && client) {
@@ -59,12 +59,12 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
           const { error } = await client
             .from('notulen')
             .update({
+              tanggal,
               judul,
               isi,
               status,
-              tanggal: today,
             })
-            .eq('id', editingId);
+            .eq('id', String(editingId));
 
           if (error) throw error;
         } else {
@@ -72,28 +72,28 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
           const { error } = await client.from('notulen').insert([
             {
               id: crypto.randomUUID(),
+              tanggal,
               judul,
               isi,
               status,
-              tanggal: today,
             },
           ]);
 
           if (error) throw error;
         }
 
-        // Sinkronkan ulang data dari Supabase
+        // Synchronize state lokal dari Supabase
         await syncWithSupabase();
       } else {
         // Fallback simpan lokal jika offline
         if (editingId) {
-          updateNotulen(editingId, { judul, konten: isi, status });
+          updateNotulen(editingId, { tanggal, judul, konten: isi, status });
         } else {
           addNotulen({
+            tanggal,
             judul,
             konten: isi,
             status,
-            tanggal: today,
           });
         }
       }
@@ -101,7 +101,7 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
       resetForm();
       setActiveTab('daftar');
     } catch (err: any) {
-      alert('Gagal menyimpan notulen ke Supabase: ' + (err.message || err));
+      alert('Gagal menyimpan notulen: ' + (err.message || err));
     } finally {
       setLoading(false);
     }
@@ -115,9 +115,15 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
 
     try {
       if (supabaseConnected && client) {
-        const { error } = await client.from('notulen').delete().eq('id', id);
+        const { error } = await client
+          .from('notulen')
+          .delete()
+          .eq('id', String(id));
+
         if (error) throw error;
 
+        // Hapus dari state lokal & reload dari Supabase
+        deleteNotulen(id);
         await syncWithSupabase();
       } else {
         deleteNotulen(id);
@@ -131,6 +137,7 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
 
   const handleEdit = (item: any) => {
     setEditingId(item.id);
+    setTanggal(item.tanggal || new Date().toISOString().split('T')[0]);
     setJudul(item.judul);
     setIsi(item.isi || item.konten || '');
     setStatus(item.status || 'published');
@@ -139,6 +146,7 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
 
   const resetForm = () => {
     setEditingId(null);
+    setTanggal(new Date().toISOString().split('T')[0]);
     setJudul('');
     setIsi('');
     setStatus('published');
@@ -205,6 +213,18 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
             /* Form Tambah/Edit Notulen */
             <form onSubmit={handleSubmit} className="space-y-3">
               <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Tanggal Rapat</label>
+                <input
+                  type="date"
+                  required
+                  disabled={loading}
+                  value={tanggal}
+                  onChange={(e) => setTanggal(e.target.value)}
+                  className="w-full border rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-emerald-500 outline-none disabled:bg-slate-50"
+                />
+              </div>
+
+              <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Judul Rapat</label>
                 <input
                   type="text"
@@ -221,7 +241,7 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Hasil & Isi Notulen</label>
                 <textarea
                   required
-                  rows={6}
+                  rows={5}
                   disabled={loading}
                   value={isi}
                   onChange={(e) => setIsi(e.target.value)}
@@ -309,7 +329,7 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
                     <div className="flex items-center gap-3 text-[10px] text-slate-400">
                       <span className="flex items-center gap-1">
                         <Calendar className="w-3 h-3" />
-                        {item.tanggal || 'Terbaru'}
+                        {item.tanggal || 'Tanpa Tanggal'}
                       </span>
                     </div>
 
