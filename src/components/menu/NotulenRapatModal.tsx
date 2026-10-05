@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useRWStore } from '../../hooks/useRWStore';
-import { X, BookOpen, Plus, Edit3, Trash2, Calendar } from 'lucide-react';
+import { getSupabase } from '../../lib/supabase';
+import { X, BookOpen, Plus, Edit3, Trash2, Calendar, Loader2 } from 'lucide-react';
 
 interface NotulenRapatModalProps {
   isOpen: boolean;
@@ -8,20 +9,24 @@ interface NotulenRapatModalProps {
 }
 
 export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, onClose }) => {
+  const store = useRWStore();
   const {
     notulen,
     currentUser,
     addNotulen,
     updateNotulen,
     deleteNotulen,
-  } = useRWStore();
+    supabaseConnected,
+    syncWithSupabase,
+  } = store;
 
   const [activeTab, setActiveTab] = useState<'daftar' | 'tambah'>('daftar');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   // Form State
   const [judul, setJudul] = useState('');
-  const [konten, setKonten] = useState('');
+  const [isi, setIsi] = useState('');
   const [status, setStatus] = useState<'draft' | 'published'>('published');
 
   if (!isOpen) return null;
@@ -31,41 +36,103 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
     currentUser?.role === 'super_admin' ||
     currentUser?.role === 'ketua_rw';
 
-  // Ambil hanya kategori Notulen (bukan Pengumuman)
+  // Filter tampilan sesuai role
   const notulenList = notulen.filter((item) => {
-    const isNotulenType = !item.kategori || item.kategori.toLowerCase() === 'notulen';
     if (!isSekretarisOrAdmin) {
-      return isNotulenType && item.status === 'published';
+      return item.status === 'published';
     }
-    return isNotulenType;
+    return true;
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!judul || !konten) return;
+    if (!judul || !isi) return;
 
-    if (editingId) {
-      updateNotulen(editingId, { judul, konten, status, kategori: 'notulen' });
-      setEditingId(null);
-    } else {
-      addNotulen({
-        judul,
-        konten,
-        kategori: 'notulen',
-        status,
-        tanggal: new Date().toISOString().split('T')[0],
-      });
+    setLoading(true);
+    const client = getSupabase();
+    const today = new Date().toISOString().split('T')[0];
+
+    try {
+      if (supabaseConnected && client) {
+        if (editingId) {
+          // UPDATE ke Supabase
+          const { error } = await client
+            .from('notulen')
+            .update({
+              judul,
+              isi,
+              status,
+              tanggal: today,
+            })
+            .eq('id', editingId);
+
+          if (error) throw error;
+        } else {
+          // INSERT ke Supabase
+          const { error } = await client.from('notulen').insert([
+            {
+              id: crypto.randomUUID(),
+              judul,
+              isi,
+              status,
+              tanggal: today,
+            },
+          ]);
+
+          if (error) throw error;
+        }
+
+        // Sinkronkan ulang data dari Supabase
+        await syncWithSupabase();
+      } else {
+        // Fallback simpan lokal jika offline
+        if (editingId) {
+          updateNotulen(editingId, { judul, konten: isi, status });
+        } else {
+          addNotulen({
+            judul,
+            konten: isi,
+            status,
+            tanggal: today,
+          });
+        }
+      }
+
+      resetForm();
+      setActiveTab('daftar');
+    } catch (err: any) {
+      alert('Gagal menyimpan notulen ke Supabase: ' + (err.message || err));
+    } finally {
+      setLoading(false);
     }
+  };
 
-    setJudul('');
-    setKonten('');
-    setActiveTab('daftar');
+  const handleDelete = async (id: string) => {
+    if (!confirm('Apakah Anda yakin ingin menghapus notulen ini?')) return;
+
+    setLoading(true);
+    const client = getSupabase();
+
+    try {
+      if (supabaseConnected && client) {
+        const { error } = await client.from('notulen').delete().eq('id', id);
+        if (error) throw error;
+
+        await syncWithSupabase();
+      } else {
+        deleteNotulen(id);
+      }
+    } catch (err: any) {
+      alert('Gagal menghapus notulen dari Supabase: ' + (err.message || err));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEdit = (item: any) => {
     setEditingId(item.id);
     setJudul(item.judul);
-    setKonten(item.konten);
+    setIsi(item.isi || item.konten || '');
     setStatus(item.status || 'published');
     setActiveTab('tambah');
   };
@@ -73,7 +140,7 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
   const resetForm = () => {
     setEditingId(null);
     setJudul('');
-    setKonten('');
+    setIsi('');
     setStatus('published');
   };
 
@@ -89,22 +156,26 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-800">Notulen Rapat</h3>
-              <p className="text-xs text-slate-500">Layanan RW 44 Terpadu</p>
+              <p className="text-xs text-slate-500">
+                Layanan RW 44 Terpadu {supabaseConnected ? '• Supabase Terhubung' : ''}
+              </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
+            disabled={loading}
+            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors disabled:opacity-50"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Navigation Tab (Hanya untuk Sekretaris/Admin) */}
+        {/* Navigation Tab */}
         {isSekretarisOrAdmin && (
           <div className="flex border-b bg-slate-50 px-4 pt-2 gap-2">
             <button
               onClick={() => { setActiveTab('daftar'); resetForm(); }}
+              disabled={loading}
               className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors ${
                 activeTab === 'daftar'
                   ? 'bg-white text-emerald-600 border-t border-x border-slate-200'
@@ -115,6 +186,7 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
             </button>
             <button
               onClick={() => { setActiveTab('tambah'); resetForm(); }}
+              disabled={loading}
               className={`flex items-center gap-1 px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors ${
                 activeTab === 'tambah'
                   ? 'bg-white text-emerald-600 border-t border-x border-slate-200'
@@ -137,10 +209,11 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
                 <input
                   type="text"
                   required
+                  disabled={loading}
                   value={judul}
                   onChange={(e) => setJudul(e.target.value)}
                   placeholder="Contoh: Hasil Musyawarah Pembentukan Panitia 17-an"
-                  className="w-full border rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
+                  className="w-full border rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-emerald-500 outline-none disabled:bg-slate-50"
                 />
               </div>
 
@@ -149,10 +222,11 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
                 <textarea
                   required
                   rows={6}
-                  value={konten}
-                  onChange={(e) => setKonten(e.target.value)}
+                  disabled={loading}
+                  value={isi}
+                  onChange={(e) => setIsi(e.target.value)}
                   placeholder="Tuliskan poin-poin hasil keputusan rapat di sini..."
-                  className="w-full border rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
+                  className="w-full border rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-emerald-500 outline-none disabled:bg-slate-50"
                 />
               </div>
 
@@ -160,8 +234,9 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Status Publikasi</label>
                 <select
                   value={status}
+                  disabled={loading}
                   onChange={(e) => setStatus(e.target.value as any)}
-                  className="w-full border rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
+                  className="w-full border rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-emerald-500 outline-none disabled:bg-slate-50"
                 >
                   <option value="published">Published (Tampil di Warga)</option>
                   <option value="draft">Draft (Hanya Pengurus)</option>
@@ -171,15 +246,18 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
+                  disabled={loading}
                   onClick={() => { setActiveTab('daftar'); resetForm(); }}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 border rounded-lg hover:bg-slate-50"
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 border rounded-lg hover:bg-slate-50 disabled:opacity-50"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700"
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
                 >
+                  {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   {editingId ? 'Update Notulen' : 'Simpan & Terbitkan'}
                 </button>
               </div>
@@ -212,13 +290,15 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
                           </span>
                           <button
                             onClick={() => handleEdit(item)}
-                            className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                            disabled={loading}
+                            className="p-1 text-blue-600 hover:bg-blue-50 rounded disabled:opacity-50"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={() => deleteNotulen(item.id)}
-                            className="p-1 text-red-600 hover:bg-red-50 rounded"
+                            onClick={() => handleDelete(item.id)}
+                            disabled={loading}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -234,7 +314,7 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
                     </div>
 
                     <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed pt-1 border-t border-slate-100">
-                      {item.konten}
+                      {item.isi || item.konten}
                     </p>
                   </div>
                 ))
@@ -247,7 +327,8 @@ export const NotulenRapatModal: React.FC<NotulenRapatModalProps> = ({ isOpen, on
         <div className="p-3 border-t bg-slate-50 flex justify-end">
           <button
             onClick={onClose}
-            className="w-full sm:w-auto px-5 py-2 bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs hover:bg-slate-300 transition-colors"
+            disabled={loading}
+            className="w-full sm:w-auto px-5 py-2 bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs hover:bg-slate-300 transition-colors disabled:opacity-50"
           >
             Tutup
           </button>
