@@ -38,7 +38,6 @@ const cleanStr = (str: any) =>
 // Helper hitung aman total kewajiban ronda berdasarkan data di Rekap Jimpitan
 const hitungRondaAman = (item: RekapJimpitanRondaEntry) => {
   if (!item) return 0;
-  // Jika status lunas, kewajiban rondanya 0
   if (item.status === 'lunas') return 0;
 
   const denda = Number(item.denda_ronda) || 0;
@@ -140,6 +139,18 @@ export function useRWStore() {
     return INITIAL_NOTULEN || [];
   });
 
+  // --- STATE PENGUMUMAN ---
+  const [pengumuman, setPengumuman] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('simrw_pengumuman');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  });
+
   const [rekapJimpitan, setRekapJimpitan] = useState<RekapJimpitanRondaEntry[]>(() => {
     try {
       const saved = localStorage.getItem('simrw_rekap_jimpitan_rw44');
@@ -223,6 +234,7 @@ export function useRWStore() {
       if (koperasi) localStorage.setItem('simrw_koperasi', JSON.stringify(koperasi));
       if (jimpitan) localStorage.setItem('simrw_jimpitan', JSON.stringify(jimpitan));
       if (notulen) localStorage.setItem('simrw_notulen', JSON.stringify(notulen));
+      if (pengumuman) localStorage.setItem('simrw_pengumuman', JSON.stringify(pengumuman));
       if (rekapJimpitan) localStorage.setItem('simrw_rekap_jimpitan_rw44', JSON.stringify(rekapJimpitan));
       if (kelompokRonda) localStorage.setItem('simrw_kelompok_ronda_rw44', JSON.stringify(kelompokRonda));
       if (rincianArisan) localStorage.setItem('simrw_rincian_arisan_rw44', JSON.stringify(rincianArisan));
@@ -230,7 +242,7 @@ export function useRWStore() {
     } catch (e) {
       console.warn('Storage sync failed', e);
     }
-  }, [currentUser, users, warga, kasRW, koperasi, jimpitan, notulen, rekapJimpitan, kelompokRonda, rincianArisan, agendaArisan]);
+  }, [currentUser, users, warga, kasRW, koperasi, jimpitan, notulen, pengumuman, rekapJimpitan, kelompokRonda, rincianArisan, agendaArisan]);
 
   // Sinkronisasi data dari Supabase dengan penanganan error terisolasi
   const syncWithSupabase = useCallback(async () => {
@@ -241,13 +253,14 @@ export function useRWStore() {
     }
     setIsSyncing(true);
     try {
-      const [uRes, wRes, kRes, kopRes, jRes, nRes] = await Promise.allSettled([
+      const [uRes, wRes, kRes, kopRes, jRes, nRes, pRes] = await Promise.allSettled([
         client.from('users').select('*').limit(1000),
         client.from('warga').select('*').order('nama', { ascending: true }),
         client.from('kas_rw').select('*').limit(1000),
         client.from('koperasi').select('*').limit(1000),
         client.from('jimpitan_denda').select('*').limit(1000),
         client.from('notulen').select('*').limit(1000),
+        client.from('pengumuman').select('*').order('created_at', { ascending: false }),
       ]);
 
       let fetchedWarga: Warga[] = [];
@@ -266,11 +279,14 @@ export function useRWStore() {
         setKoperasi(kopRes.value.data);
       }
 
+      if (pRes.status === 'fulfilled' && pRes.value.data) {
+        setPengumuman(pRes.value.data);
+      }
+
       if (jRes.status === 'fulfilled' && jRes.value.data && jRes.value.data.length > 0) {
         const jData = jRes.value.data;
         setJimpitan(jData);
 
-        // Konversi data Supabase jimpitan_denda ke struktur RekapJimpitanRondaEntry
         const mappedRekap: RekapJimpitanRondaEntry[] = jData.map((item: any, index: number) => {
           const namaVal = item.nama_warga || item.nama || '-';
           const blokVal = item.no_rumah || item.blok || '-';
@@ -300,7 +316,6 @@ export function useRWStore() {
 
         setRekapJimpitan(mappedRekap);
       } else if (fetchedWarga.length > 0) {
-        // Fallback: Jika jimpitan_denda kosong, tampilkan daftar warga lengkap di rekap
         const defaultRekap: RekapJimpitanRondaEntry[] = fetchedWarga.map((w, index) => ({
           id: w.id,
           no: index + 1,
@@ -538,6 +553,27 @@ export function useRWStore() {
     setNotulen((prev) => prev.filter((n) => n.id !== id));
   };
 
+  // --- FUNGSI CRUD PENGUMUMAN ---
+  const addPengumuman = (data: any) => {
+    const item = {
+      ...data,
+      id: data.id || `pgm-${Date.now()}`,
+      created_at: new Date().toISOString(),
+    };
+    setPengumuman((prev) => [item, ...prev]);
+    return item;
+  };
+
+  const updatePengumuman = (id: string, data: any) => {
+    setPengumuman((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, ...data } : p))
+    );
+  };
+
+  const deletePengumuman = (id: string) => {
+    setPengumuman((prev) => prev.filter((p) => p.id !== id));
+  };
+
   const resetToDemoData = () => {
     localStorage.clear();
     
@@ -553,6 +589,7 @@ export function useRWStore() {
     setKoperasi(INITIAL_KOPERASI || []);
     setJimpitan(INITIAL_JIMPITAN || []);
     setNotulen(INITIAL_NOTULEN || []);
+    setPengumuman([]);
     setRekapJimpitan(INITIAL_REKAP_JIMPITAN_RONDA || []);
     setKelompokRonda(INITIAL_KELOMPOK_RONDA || []);
     setRincianArisan(INITIAL_RINCIAN_ARISAN_RW44 || []);
@@ -726,6 +763,7 @@ export function useRWStore() {
     koperasi,
     jimpitan,
     notulen,
+    pengumuman,
     isSyncing,
     supabaseConnected,
     loginWithEmail,
@@ -747,7 +785,7 @@ export function useRWStore() {
     markJimpitanLunas,
     rekapJimpitan,
     kelompokRonda,
-    rincianArisan: rincianArisanTerhubung, // <-- Mengembalikan data yang terhubung otomatis
+    rincianArisan: rincianArisanTerhubung,
     agendaArisan,
     updateRekapJimpitanItem,
     addRekapJimpitanItem,
@@ -763,6 +801,9 @@ export function useRWStore() {
     updateNotulen,
     updateNotulenStatus,
     deleteNotulen,
+    addPengumuman,
+    updatePengumuman,
+    deletePengumuman,
     resetToDemoData,
     syncWithSupabase,
     getCombinedTagihan,

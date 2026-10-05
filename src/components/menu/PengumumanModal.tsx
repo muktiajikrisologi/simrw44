@@ -11,13 +11,12 @@ interface PengumumanModalProps {
 export const PengumumanModal: React.FC<PengumumanModalProps> = ({ isOpen, onClose }) => {
   const store = useRWStore();
   const {
-    notulen,
     currentUser,
-    addNotulen,
-    updateNotulen,
-    deleteNotulen,
     supabaseConnected,
     syncWithSupabase,
+    addPengumuman,      // Tambahkan jika store Anda menyediakan setter lokal
+    updatePengumuman,   // Tambahkan jika store Anda menyediakan setter lokal
+    deletePengumuman,   // Tambahkan jika store Anda menyediakan setter lokal
   } = store;
 
   const [activeTab, setActiveTab] = useState<'daftar' | 'tambah'>('daftar');
@@ -25,9 +24,13 @@ export const PengumumanModal: React.FC<PengumumanModalProps> = ({ isOpen, onClos
   const [loading, setLoading] = useState(false);
 
   // Form State
+  const [tanggal, setTanggal] = useState<string>(new Date().toISOString().split('T')[0]);
   const [judul, setJudul] = useState('');
-  const [konten, setKonten] = useState('');
+  const [isi, setIsi] = useState('');
   const [status, setStatus] = useState<'draft' | 'published'>('published');
+
+  // Ambil daftar pengumuman dari store (atau fallback ke array kosong)
+  const pengumumanData = store.pengumuman || [];
 
   if (!isOpen) return null;
 
@@ -36,70 +39,60 @@ export const PengumumanModal: React.FC<PengumumanModalProps> = ({ isOpen, onClos
     currentUser?.role === 'super_admin' ||
     currentUser?.role === 'ketua_rw';
 
-  // Filter khusus kategori 'pengumuman'
-  const pengumumanList = notulen.filter((item) => {
-    const isPengumuman = item.kategori?.toLowerCase() === 'pengumuman';
+  const pengumumanList = pengumumanData.filter((item: any) => {
     if (!isSekretarisOrAdmin) {
-      return isPengumuman && item.status === 'published';
+      return item.status === 'published';
     }
-    return isPengumuman;
+    return true;
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!judul || !konten) return;
+    if (!judul || !isi || !tanggal) return;
 
     setLoading(true);
     const client = getSupabase();
-    const today = new Date().toISOString().split('T')[0];
+    const newId = editingId || crypto.randomUUID();
+
+    const payload = {
+      id: newId,
+      tanggal,
+      judul,
+      isi,
+      status,
+    };
 
     try {
       if (supabaseConnected && client) {
         if (editingId) {
           // UPDATE ke Supabase
           const { error } = await client
-            .from('notulen')
+            .from('pengumuman')
             .update({
+              tanggal,
               judul,
-              konten,
+              isi,
               status,
-              kategori: 'pengumuman',
-              tanggal: today,
             })
-            .eq('id', editingId);
+            .eq('id', String(editingId));
 
           if (error) throw error;
         } else {
           // INSERT ke Supabase
-          const { error } = await client.from('notulen').insert([
-            {
-              id: crypto.randomUUID(),
-              judul,
-              konten,
-              kategori: 'pengumuman',
-              status,
-              tanggal: today,
-            },
-          ]);
+          const { error } = await client.from('pengumuman').insert([payload]);
 
           if (error) throw error;
         }
 
-        // Sync ulang agar data di state lokal langsung terbarui dari Supabase
+        // Jalankan Sync Supabase
         await syncWithSupabase();
+      }
+
+      // Update Local Store Jika Fungsi Tersedia
+      if (editingId) {
+        if (updatePengumuman) updatePengumuman(editingId, payload);
       } else {
-        // Fallback jika tidak terhubung Supabase
-        if (editingId) {
-          updateNotulen(editingId, { judul, konten, status, kategori: 'pengumuman' });
-        } else {
-          addNotulen({
-            judul,
-            konten,
-            kategori: 'pengumuman',
-            status,
-            tanggal: today,
-          });
-        }
+        if (addPengumuman) addPengumuman(payload);
       }
 
       resetForm();
@@ -119,13 +112,17 @@ export const PengumumanModal: React.FC<PengumumanModalProps> = ({ isOpen, onClos
 
     try {
       if (supabaseConnected && client) {
-        const { error } = await client.from('notulen').delete().eq('id', id);
+        const { error } = await client
+          .from('pengumuman')
+          .delete()
+          .eq('id', String(id));
+
         if (error) throw error;
 
         await syncWithSupabase();
-      } else {
-        deleteNotulen(id);
       }
+
+      if (deletePengumuman) deletePengumuman(id);
     } catch (err: any) {
       alert('Gagal menghapus pengumuman dari Supabase: ' + (err.message || err));
     } finally {
@@ -135,16 +132,18 @@ export const PengumumanModal: React.FC<PengumumanModalProps> = ({ isOpen, onClos
 
   const handleEdit = (item: any) => {
     setEditingId(item.id);
+    setTanggal(item.tanggal || new Date().toISOString().split('T')[0]);
     setJudul(item.judul);
-    setKonten(item.konten);
+    setIsi(item.isi || item.konten || '');
     setStatus(item.status || 'published');
     setActiveTab('tambah');
   };
 
   const resetForm = () => {
     setEditingId(null);
+    setTanggal(new Date().toISOString().split('T')[0]);
     setJudul('');
-    setKonten('');
+    setIsi('');
     setStatus('published');
   };
 
@@ -209,6 +208,18 @@ export const PengumumanModal: React.FC<PengumumanModalProps> = ({ isOpen, onClos
             /* Form Tambah/Edit Pengumuman */
             <form onSubmit={handleSubmit} className="space-y-3">
               <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Tanggal Pengumuman</label>
+                <input
+                  type="date"
+                  required
+                  disabled={loading}
+                  value={tanggal}
+                  onChange={(e) => setTanggal(e.target.value)}
+                  className="w-full border rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-amber-500 outline-none disabled:bg-slate-50"
+                />
+              </div>
+
+              <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Judul Pengumuman</label>
                 <input
                   type="text"
@@ -225,10 +236,10 @@ export const PengumumanModal: React.FC<PengumumanModalProps> = ({ isOpen, onClos
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Isi Pengumuman</label>
                 <textarea
                   required
-                  rows={6}
+                  rows={5}
                   disabled={loading}
-                  value={konten}
-                  onChange={(e) => setKonten(e.target.value)}
+                  value={isi}
+                  onChange={(e) => setIsi(e.target.value)}
                   placeholder="Tulis pesan atau pengumuman lengkap untuk warga..."
                   className="w-full border rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-amber-500 outline-none disabled:bg-slate-50"
                 />
@@ -274,7 +285,7 @@ export const PengumumanModal: React.FC<PengumumanModalProps> = ({ isOpen, onClos
                   Belum ada pengumuman yang ditambahkan.
                 </div>
               ) : (
-                pengumumanList.map((item) => (
+                pengumumanList.map((item: any) => (
                   <div
                     key={item.id}
                     className="border border-slate-100 bg-amber-50/30 rounded-xl p-3.5 hover:border-amber-200 transition-all space-y-2"
@@ -313,12 +324,12 @@ export const PengumumanModal: React.FC<PengumumanModalProps> = ({ isOpen, onClos
                     <div className="flex items-center gap-3 text-[10px] text-slate-400">
                       <span className="flex items-center gap-1">
                         <Calendar className="w-3 h-3" />
-                        {item.tanggal || 'Terbaru'}
+                        {item.tanggal || 'Tanpa Tanggal'}
                       </span>
                     </div>
 
                     <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed pt-1 border-t border-slate-100">
-                      {item.konten}
+                      {item.isi || item.konten}
                     </p>
                   </div>
                 ))
