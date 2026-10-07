@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UserRole, UserProfile } from '../../types';
-import { ShieldCheck, LogIn, Key, Mail, AlertCircle, Sparkles, UserCheck, Database, Eye, EyeOff, X } from 'lucide-react';
+import { ShieldCheck, LogIn, Key, Mail, AlertCircle, Sparkles, UserCheck, Database, Eye, EyeOff, X, User } from 'lucide-react';
 
 interface LoginViewProps {
   users: UserProfile[];
@@ -28,6 +28,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
     (typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV) ||
     (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development');
 
+  const clearPengurusSession = () => {
+    localStorage.removeItem('simrw_current_user');
+    localStorage.removeItem('simrw_user_role');
+    localStorage.removeItem('rw_user_role');
+    localStorage.removeItem('rw_current_user');
+    localStorage.removeItem('sb-access-token');
+    localStorage.removeItem('sb-refresh-token');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -36,7 +45,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     try {
       const success = await onLoginWithEmail(email, password);
       if (!success) {
-        setErrorMsg('Email atau kata sandi tidak cocok. Silakan periksa kembali.');
+        setErrorMsg('Email atau kata sandi tidak cocok.');
       } else {
         if (onClose) onClose();
       }
@@ -45,6 +54,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleLoginAsWarga = () => {
+    clearPengurusSession();
+    onLoginAsRole('warga');
+    if (onClose) onClose();
   };
 
   const demoRoles: Array<{ role: UserRole; title: string; color: string }> = [
@@ -58,10 +73,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 relative animate-in fade-in zoom-in-95 duration-200">
-        
-        {/* Tombol Close */}
         {onClose && (
           <button
+            type="button"
             onClick={onClose}
             className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition cursor-pointer"
           >
@@ -69,8 +83,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
           </button>
         )}
 
-        {/* Logo & Headline */}
-        <div className="text-center mb-6 pt-2">
+        <div className="text-center mb-5 pt-2">
           <div className="inline-flex p-3 bg-blue-900 text-white rounded-2xl shadow-sm mb-2">
             <ShieldCheck className="w-7 h-7 text-amber-400" />
           </div>
@@ -78,7 +91,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
           <p className="text-xs text-slate-500 mt-0.5">Akses khusus untuk pengurus & petugas RW</p>
         </div>
 
-        {/* Status Supabase */}
         <div className="flex justify-center mb-4">
           <button
             type="button"
@@ -94,7 +106,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
           </button>
         </div>
 
-        {/* Error notification */}
         {errorMsg && (
           <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
@@ -102,8 +113,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
           </div>
         )}
 
-        {/* Form Login */}
-        <form onSubmit={handleSubmit} className="space-y-3.5">
+        <form onSubmit={handleSubmit} className="space-y-3">
           <div>
             <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
               Email Akun Pengurus
@@ -138,7 +148,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 focus:outline-none"
+                className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -155,26 +165,29 @@ export const LoginView: React.FC<LoginViewProps> = ({
           </button>
         </form>
 
-        {/* Mode Demo Testing (Hanya Muncul di Dev) */}
-        {isDev && (
-          <>
-            <div className="relative my-4">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-200" />
-              </div>
-              <div className="relative flex justify-center text-[10px] uppercase">
-                <span className="bg-white px-2 text-slate-400 font-semibold flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-amber-500" /> Uji Coba Instan (Dev Only)
-                </span>
-              </div>
-            </div>
+        <div className="mt-4 pt-3 border-t border-slate-100 flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={handleLoginAsWarga}
+            className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer border border-slate-200"
+          >
+            <User className="w-4 h-4 text-slate-500" />
+            <span>Masuk Sebagai Warga / Hapus Cache</span>
+          </button>
+        </div>
 
+        {isDev && (
+          <div className="mt-4 pt-3 border-t border-slate-100">
+            <div className="text-[10px] uppercase text-slate-400 font-semibold mb-2 text-center flex items-center justify-center gap-1">
+              <Sparkles className="w-3 h-3 text-amber-500" /> Demo Role
+            </div>
             <div className="grid grid-cols-2 gap-1.5">
               {demoRoles.map((item) => (
                 <button
                   key={item.role}
                   type="button"
                   onClick={() => {
+                    clearPengurusSession();
                     onLoginAsRole(item.role);
                     if (onClose) onClose();
                   }}
@@ -185,7 +198,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 </button>
               ))}
             </div>
-          </>
+          </div>
         )}
       </div>
     </div>

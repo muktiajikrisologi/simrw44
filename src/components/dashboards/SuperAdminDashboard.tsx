@@ -534,7 +534,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   <option value="all">Semua RT</option>
                   <option value="01">RT 01</option>
                   <option value="02">RT 02</option>
-                  <option value="03">RT 03</option>
+                  <option value="03">RT 18/19</option>
                   <option value="04">RT 04</option>
                 </select>
               </div>
@@ -841,7 +841,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   >
                     <option value="01">RT 01</option>
                     <option value="02">RT 02</option>
-                    <option value="03">RT 03</option>
+                    <option value="03">RT 18/19</option>
                     <option value="04">RT 04</option>
                   </select>
                 </div>

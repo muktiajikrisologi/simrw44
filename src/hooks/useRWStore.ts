@@ -29,13 +29,11 @@ import {
 } from '../lib/dataRW44';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
 
-// Helper pembersih string (menghapus spasi, titik, strip, agar matching presisi)
 const cleanStr = (str: any) =>
   String(str || '')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 
-// Helper hitung aman total kewajiban ronda berdasarkan data di Rekap Jimpitan
 const hitungRondaAman = (item: RekapJimpitanRondaEntry) => {
   if (!item) return 0;
   if (item.status === 'lunas') return 0;
@@ -50,7 +48,11 @@ const hitungRondaAman = (item: RekapJimpitanRondaEntry) => {
 };
 
 export function useRWStore() {
-  const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
+  const [role, setRole] = useState<UserRole>(() => {
+    return (localStorage.getItem('simrw_user_role') as UserRole) || 'warga';
+  });
+
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     try {
       const saved = localStorage.getItem('simrw_current_user');
       if (saved) {
@@ -60,12 +62,7 @@ export function useRWStore() {
     } catch (e) {
       console.warn('Gagal membaca current user dari localStorage', e);
     }
-    return INITIAL_USERS[0] || {
-      id: 'usr-default',
-      nama: 'Pengguna',
-      email: 'admin@rw05.id',
-      role: 'super_admin',
-    };
+    return null;
   });
 
   const [users, setUsers] = useState<UserProfile[]>(() => {
@@ -139,7 +136,6 @@ export function useRWStore() {
     return INITIAL_NOTULEN || [];
   });
 
-  // --- STATE PENGUMUMAN ---
   const [pengumuman, setPengumuman] = useState<any[]>(() => {
     try {
       const saved = localStorage.getItem('simrw_pengumuman');
@@ -198,7 +194,6 @@ export function useRWStore() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [supabaseConnected, setSupabaseConnected] = useState(isSupabaseConfigured());
 
-  // Dynamic Link: Menghubungkan rekapJimpitan (ronda) ke rincianArisan secara real-time
   const rincianArisanTerhubung = useMemo(() => {
     return (rincianArisan || []).map((w) => {
       const namaW = cleanStr(w.nama);
@@ -224,10 +219,15 @@ export function useRWStore() {
     });
   }, [rincianArisan, rekapJimpitan]);
 
-  // Simpan perubahan state ke LocalStorage secara aman
   useEffect(() => {
     try {
-      if (currentUser) localStorage.setItem('simrw_current_user', JSON.stringify(currentUser));
+      if (currentUser) {
+        localStorage.setItem('simrw_current_user', JSON.stringify(currentUser));
+      } else {
+        localStorage.removeItem('simrw_current_user');
+      }
+      localStorage.setItem('simrw_user_role', role);
+
       if (users) localStorage.setItem('simrw_users', JSON.stringify(users));
       if (warga) localStorage.setItem('simrw_warga', JSON.stringify(warga));
       if (kasRW) localStorage.setItem('simrw_kas', JSON.stringify(kasRW));
@@ -242,9 +242,8 @@ export function useRWStore() {
     } catch (e) {
       console.warn('Storage sync failed', e);
     }
-  }, [currentUser, users, warga, kasRW, koperasi, jimpitan, notulen, pengumuman, rekapJimpitan, kelompokRonda, rincianArisan, agendaArisan]);
+  }, [currentUser, role, users, warga, kasRW, koperasi, jimpitan, notulen, pengumuman, rekapJimpitan, kelompokRonda, rincianArisan, agendaArisan]);
 
-  // Sinkronisasi data dari Supabase dengan penanganan error terisolasi
   const syncWithSupabase = useCallback(async () => {
     const client = getSupabase();
     if (!client) {
@@ -315,23 +314,6 @@ export function useRWStore() {
         });
 
         setRekapJimpitan(mappedRekap);
-      } else if (fetchedWarga.length > 0) {
-        const defaultRekap: RekapJimpitanRondaEntry[] = fetchedWarga.map((w, index) => ({
-          id: w.id,
-          no: index + 1,
-          nama: w.nama,
-          nama_warga: w.nama,
-          blok: w.no_rumah || '-',
-          no_rumah: w.no_rumah || '-',
-          denda_ronda: 0,
-          bagi_jimpitan: 0,
-          tdk_isi_jimpitan: 0,
-          setoran_regu: 0,
-          tunggakan_bln_lalu: 0,
-          jumlah: 0,
-          status: 'lunas',
-        }));
-        setRekapJimpitan(defaultRekap);
       }
 
       if (nRes.status === 'fulfilled' && nRes.value.data && nRes.value.data.length > 0) {
@@ -362,26 +344,39 @@ export function useRWStore() {
         return false;
       }
       setCurrentUser(found);
+      setRole(found.role);
       return true;
     }
     return false;
   };
 
   const switchUser = (user: UserProfile) => {
-    if (user) setCurrentUser(user);
+    if (user) {
+      setCurrentUser(user);
+      setRole(user.role);
+    }
   };
 
-  const switchRole = (role: UserRole) => {
-    const existing = users.find((u) => u.role === role);
+  const switchRole = (newRole: UserRole) => {
+    setRole(newRole);
+    if (newRole === 'warga') {
+      setCurrentUser(null);
+      localStorage.removeItem('simrw_current_user');
+      localStorage.removeItem('rw_current_user');
+      localStorage.setItem('simrw_user_role', 'warga');
+      return;
+    }
+
+    const existing = users.find((u) => u.role === newRole);
     if (existing) {
       setCurrentUser(existing);
     } else {
       const newUser: UserProfile = {
-        id: `usr-${role}-${Date.now()}`,
-        nama: `Pengguna ${role.toUpperCase()}`,
-        email: `${role}@rw05.id`,
+        id: `usr-${newRole}-${Date.now()}`,
+        nama: `Pengguna ${newRole.toUpperCase()}`,
+        email: `${newRole}@rw05.id`,
         password: 'password123',
-        role,
+        role: newRole,
         created_at: new Date().toISOString(),
       };
       setUsers((prev) => [newUser, ...prev]);
@@ -417,6 +412,7 @@ export function useRWStore() {
 
     if (currentUser && currentUser.id === userId) {
       setCurrentUser((prev) => {
+        if (!prev) return null;
         const updated = { ...prev, ...updatedData };
         if (updatedData.newPassword) {
           updated.password = updatedData.newPassword;
@@ -525,7 +521,6 @@ export function useRWStore() {
     );
   };
 
-  // --- HENDEL NOTULEN DAN PENGUMUMAN ---
   const addNotulen = (data: Omit<Notulen, 'id' | 'created_at'>) => {
     const item: Notulen = {
       ...data,
@@ -553,7 +548,6 @@ export function useRWStore() {
     setNotulen((prev) => prev.filter((n) => n.id !== id));
   };
 
-  // --- FUNGSI CRUD PENGUMUMAN ---
   const addPengumuman = (data: any) => {
     const item = {
       ...data,
@@ -583,7 +577,8 @@ export function useRWStore() {
     }));
 
     setUsers(initialWithPwd);
-    setCurrentUser(initialWithPwd[0]);
+    setCurrentUser(null);
+    setRole('warga');
     setWarga(INITIAL_WARGA || []);
     setKasRW(INITIAL_KAS_RW || []);
     setKoperasi(INITIAL_KOPERASI || []);
@@ -756,6 +751,7 @@ export function useRWStore() {
   }, [warga, jimpitan, koperasi]);
 
   return {
+    role,
     currentUser,
     users,
     warga,

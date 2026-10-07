@@ -28,8 +28,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'beranda' | 'faq' | 'riwayat' | 'profil'>('beranda');
   const [selectedMenu, setSelectedMenu] = useState<string | null>(null);
 
-  // Default role jika belum login adalah 'warga'
-  const activeRole: UserRole = store.currentUser?.role || store.role || 'warga';
+  const activeRole: UserRole = store.role || 'warga';
   const isPengurus = activeRole !== 'warga';
 
   useEffect(() => {
@@ -155,7 +154,7 @@ export default function App() {
                 </div>
                 <div>
                   <h2 className="font-bold text-sm text-white">{store.currentUser?.nama || 'Warga RW 44'}</h2>
-                  <p className="text-[11px] text-blue-100">RT 03 / RW 44</p>
+                  <p className="text-[11px] text-blue-100">RT 18/19 / RW 44</p>
                   <span className={`inline-block mt-1 px-2 py-0.5 rounded-md text-[10px] font-bold ${
                     isPengurus ? 'bg-amber-400 text-slate-900' : 'bg-emerald-500/30 text-emerald-200'
                   }`}>
@@ -190,7 +189,7 @@ export default function App() {
                 ].map((item) => (
                   <button
                     key={item.role}
-                    onClick={() => store.switchRole(item.role)}
+                    onClick={() => handleLoginAsRole(item.role)}
                     className={`py-1 px-2 rounded-lg text-[10px] font-bold transition text-center cursor-pointer ${activeRole === item.role ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
                   >
                     {item.label}
@@ -359,7 +358,7 @@ export default function App() {
         )}
 
         {showRoleSwitcher && activeRole === 'super_admin' && (
-          <RoleSwitcherModal currentRole={activeRole} onSelectRole={(r) => { store.switchRole(r); setShowRoleSwitcher(false); }} onClose={() => setShowRoleSwitcher(false)} />
+          <RoleSwitcherModal currentRole={activeRole} onSelectRole={(r) => handleLoginAsRole(r)} onClose={() => setShowRoleSwitcher(false)} />
         )}
 
         {showSupabaseModal && <SupabaseConfigModal onClose={() => setShowSupabaseModal(false)} onRefresh={store.syncWithSupabase} />}
