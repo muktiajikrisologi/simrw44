@@ -18,17 +18,19 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { MenuModal } from './components/modals/MenuModal';
 
 // Icons
-import { Database, LogOut, Home, HelpCircle, History, User, Sparkles } from 'lucide-react';
+import { Database, LogOut, Home, HelpCircle, History, User, Sparkles, ShieldCheck } from 'lucide-react';
 
 export default function App() {
   const store = useRWStore();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [showRoleSwitcher, setShowRoleSwitcher] = useState(false);
   const [showSupabaseModal, setShowSupabaseModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'beranda' | 'faq' | 'riwayat' | 'profil'>('beranda');
   const [selectedMenu, setSelectedMenu] = useState<string | null>(null);
 
+  // Default role jika belum login adalah 'warga'
   const activeRole: UserRole = store.currentUser?.role || store.role || 'warga';
+  const isPengurus = activeRole !== 'warga';
 
   useEffect(() => {
     if (store.supabaseConnected && typeof store.syncWithSupabase === 'function') {
@@ -38,17 +40,17 @@ export default function App() {
 
   const handleLoginAsRole = (role: UserRole) => {
     store.switchRole(role);
-    setIsLoggedIn(true);
+    setShowLoginModal(false);
   };
 
   const handleLoginWithEmail = async (email: string, pass: string): Promise<boolean> => {
     const success = await store.loginWithEmail(email, pass);
-    if (success) setIsLoggedIn(true);
+    if (success) setShowLoginModal(false);
     return Boolean(success);
   };
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
+  const handleLogoutPengurus = () => {
+    store.switchRole('warga');
     setSelectedMenu(null);
   };
 
@@ -99,30 +101,6 @@ export default function App() {
     }
   };
 
-  if (!isLoggedIn) {
-    return (
-      <div className="min-h-screen bg-slate-100 text-slate-800 font-sans antialiased flex flex-col justify-between">
-        <div>
-          <OfflineIndicator />
-          <LoginView
-            users={store.users || []}
-            onLoginAsRole={handleLoginAsRole}
-            onLoginWithEmail={handleLoginWithEmail}
-            onOpenSupabaseModal={() => setShowSupabaseModal(true)}
-            supabaseConnected={store.supabaseConnected}
-          />
-        </div>
-        <div className="p-4 text-center">
-          <button onClick={() => setShowSupabaseModal(true)} className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-indigo-600 transition cursor-pointer">
-            <Database className="w-4 h-4" />
-            {store.supabaseConnected ? 'Supabase Terhubung' : 'Atur Koneksi Supabase'}
-          </button>
-        </div>
-        {showSupabaseModal && <SupabaseConfigModal onClose={() => setShowSupabaseModal(false)} onRefresh={store.syncWithSupabase} />}
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-100 font-sans antialiased flex justify-center">
       <div className="w-full max-w-md bg-slate-50 min-h-screen flex flex-col justify-between shadow-2xl relative pb-20">
@@ -135,9 +113,35 @@ export default function App() {
                 <div className="w-8 h-8 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center font-bold text-sm">RW</div>
                 <h1 className="font-extrabold text-lg tracking-wide">RW 44</h1>
               </div>
+
+              {/* Tombol Pojok Kanan Atas */}
               <div className="flex items-center gap-2">
-                <button onClick={() => setShowSupabaseModal(true)} className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition cursor-pointer"><Database className="w-4 h-4 text-white" /></button>
-                <button onClick={handleLogout} className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition cursor-pointer"><LogOut className="w-4 h-4 text-white" /></button>
+                <button 
+                  onClick={() => setShowSupabaseModal(true)} 
+                  className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition cursor-pointer"
+                  title="Status Koneksi"
+                >
+                  <Database className="w-4 h-4 text-white" />
+                </button>
+
+                {isPengurus ? (
+                  <button 
+                    onClick={handleLogoutPengurus} 
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-rose-500/80 hover:bg-rose-600 text-white text-xs font-bold transition cursor-pointer shadow-sm"
+                    title="Keluar Mode Pengurus"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Keluar</span>
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => setShowLoginModal(true)} 
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-slate-900 text-xs font-black shadow-md transition cursor-pointer"
+                  >
+                    <ShieldCheck className="w-4 h-4 text-slate-900" />
+                    <span>Pengurus</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -150,9 +154,11 @@ export default function App() {
                   <User className="w-6 h-6" />
                 </div>
                 <div>
-                  <h2 className="font-bold text-sm text-white">{store.currentUser?.nama || 'Budi Santoso'}</h2>
-                  <p className="text-[11px] text-blue-100">RT 03 / RW 44 • Blok A-12</p>
-                  <span className="inline-block mt-1 px-2 py-0.5 rounded-md bg-emerald-500/30 text-emerald-200 text-[10px] font-semibold">
+                  <h2 className="font-bold text-sm text-white">{store.currentUser?.nama || 'Warga RW 44'}</h2>
+                  <p className="text-[11px] text-blue-100">RT 03 / RW 44</p>
+                  <span className={`inline-block mt-1 px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                    isPengurus ? 'bg-amber-400 text-slate-900' : 'bg-emerald-500/30 text-emerald-200'
+                  }`}>
                     Role: {activeRole.replace('_', ' ').toUpperCase()}
                   </span>
                 </div>
@@ -326,7 +332,19 @@ export default function App() {
           </button>
         </nav>
 
-        {/* Modal Utama */}
+        {/* Modal Login Pengurus */}
+        {showLoginModal && (
+          <LoginView
+            users={store.users || []}
+            onLoginAsRole={handleLoginAsRole}
+            onLoginWithEmail={handleLoginWithEmail}
+            onOpenSupabaseModal={() => setShowSupabaseModal(true)}
+            supabaseConnected={store.supabaseConnected}
+            onClose={() => setShowLoginModal(false)}
+          />
+        )}
+
+        {/* Modal Menu Layanan */}
         {selectedMenu && (
           <MenuModal
             selectedMenu={selectedMenu}
@@ -339,9 +357,11 @@ export default function App() {
             onChangeUserPassword={(id, pass) => handleUpdateUser(id, { newPassword: pass })}
           />
         )}
+
         {showRoleSwitcher && activeRole === 'super_admin' && (
           <RoleSwitcherModal currentRole={activeRole} onSelectRole={(r) => { store.switchRole(r); setShowRoleSwitcher(false); }} onClose={() => setShowRoleSwitcher(false)} />
         )}
+
         {showSupabaseModal && <SupabaseConfigModal onClose={() => setShowSupabaseModal(false)} onRefresh={store.syncWithSupabase} />}
       </div>
     </div>
